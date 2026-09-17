@@ -7,6 +7,42 @@ import type { InferInput, SimpleError } from '@vinejs/vine/types'
 export type ParamValue = string | number | bigint | boolean
 
 export interface Registry {
+  'docs.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/docs'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/docs_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/docs_controller').default['index']>>>
+    }
+  }
+  'docs.spec': {
+    methods: ["GET","HEAD"]
+    pattern: '/docs/openapi.yaml'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/docs_controller').default['spec']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/docs_controller').default['spec']>>>
+    }
+  }
+  'docs.asset': {
+    methods: ["GET","HEAD"]
+    pattern: '/docs/swagger-ui/:file'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { file: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/docs_controller').default['asset']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/docs_controller').default['asset']>>>
+    }
+  }
   'auth.new_account.store': {
     methods: ["POST"]
     pattern: '/api/v1/auth/signup'

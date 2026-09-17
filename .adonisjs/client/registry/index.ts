@@ -6,6 +6,24 @@ import type { ApiDefinition } from './tree.d.ts'
 const placeholder: any = {}
 
 const routes = {
+  'docs.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/docs',
+    tokens: [{"old":"/docs","type":0,"val":"docs","end":""}],
+    types: placeholder as Registry['docs.index']['types'],
+  },
+  'docs.spec': {
+    methods: ["GET","HEAD"],
+    pattern: '/docs/openapi.yaml',
+    tokens: [{"old":"/docs/openapi.yaml","type":0,"val":"docs","end":""},{"old":"/docs/openapi.yaml","type":0,"val":"openapi.yaml","end":""}],
+    types: placeholder as Registry['docs.spec']['types'],
+  },
+  'docs.asset': {
+    methods: ["GET","HEAD"],
+    pattern: '/docs/swagger-ui/:file',
+    tokens: [{"old":"/docs/swagger-ui/:file","type":0,"val":"docs","end":""},{"old":"/docs/swagger-ui/:file","type":0,"val":"swagger-ui","end":""},{"old":"/docs/swagger-ui/:file","type":1,"val":"file","end":""}],
+    types: placeholder as Registry['docs.asset']['types'],
+  },
   'auth.new_account.store': {
     methods: ["POST"],
     pattern: '/api/v1/auth/signup',

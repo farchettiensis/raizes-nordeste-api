@@ -2,9 +2,11 @@ import { middleware } from '#start/kernel'
 import router from '@adonisjs/core/services/router'
 import { controllers } from '#generated/controllers'
 
-router.get('/', () => {
-  return { hello: 'world' }
-})
+router.get('/', ({ response }) => response.redirect('/docs'))
+
+router.get('/docs', [controllers.Docs, 'index'])
+router.get('/docs/openapi.yaml', [controllers.Docs, 'spec'])
+router.get('/docs/swagger-ui/:file', [controllers.Docs, 'asset'])
 
 router
   .group(() => {

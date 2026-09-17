@@ -1,0 +1,281 @@
+openapi: 3.0.3
+
+info:
+  title: API Raizes do Nordeste
+  version: 0.1.0
+  description: |
+    API REST da rede de lanchonetes Raizes do Nordeste.
+
+    Projeto Multidisciplinar 2026, trilha Back-End (UNINTER).
+
+    Todas as falhas respondem com o mesmo corpo padronizado, descrito no
+    schema `Erro`.
+
+servers:
+  - url: /
+    description: Servidor que esta atendendo esta documentacao
+
+tags:
+  - name: Autenticacao
+    description: Cadastro, login e logout
+  - name: Conta
+    description: Dados da conta autenticada
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/auth/signup:
+    post:
+      tags: [Autenticacao]
+      summary: Cria uma conta e devolve um token de acesso
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NovaConta'
+            example:
+              fullName: Dona Francisca
+              email: francisca@raizes.test
+              password: Senha@123
+              passwordConfirmation: Senha@123
+      responses:
+        '200':
+          description: Conta criada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RespostaAutenticacao'
+        '422':
+          $ref: '#/components/responses/DadosInvalidos'
+
+  /api/v1/auth/login:
+    post:
+      tags: [Autenticacao]
+      summary: Autentica o usuario e devolve um token de acesso
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Credenciais'
+            example:
+              email: francisca@raizes.test
+              password: Senha@123
+      responses:
+        '200':
+          description: Autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RespostaAutenticacao'
+        '401':
+          $ref: '#/components/responses/CredenciaisInvalidas'
+        '422':
+          $ref: '#/components/responses/DadosInvalidos'
+
+  /api/v1/account/profile:
+    get:
+      tags: [Conta]
+      summary: Devolve os dados da conta autenticada
+      responses:
+        '200':
+          description: Dados da conta
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Usuario'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+
+  /api/v1/account/logout:
+    post:
+      tags: [Conta]
+      summary: Revoga o token de acesso em uso
+      responses:
+        '200':
+          description: Token revogado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Logged out successfully
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Token de acesso devolvido por signup ou login
+
+  schemas:
+    DetalheErro:
+      type: object
+      required: [field, issue]
+      properties:
+        field:
+          type: string
+          example: email
+        issue:
+          type: string
+          example: The email field must be a valid email address
+
+    Erro:
+      type: object
+      required: [error, message, details, timestamp, path]
+      properties:
+        error:
+          type: string
+          description: Identificador estavel do erro
+          example: DADOS_INVALIDOS
+        message:
+          type: string
+          example: Os dados enviados nao passaram na validacao.
+        details:
+          type: array
+          items:
+            $ref: '#/components/schemas/DetalheErro'
+        timestamp:
+          type: string
+          format: date-time
+          example: '2026-02-05T12:00:00.000Z'
+        path:
+          type: string
+          example: /api/v1/auth/signup
+        requestId:
+          type: string
+          format: uuid
+          example: 33be9a44-6849-439c-960c-cb2d995aa732
+
+    Usuario:
+      type: object
+      required: [id, fullName, email, createdAt, updatedAt, initials]
+      properties:
+        id:
+          type: integer
+          example: 1
+        fullName:
+          type: string
+          nullable: true
+          example: Dona Francisca
+        email:
+          type: string
+          format: email
+          example: francisca@raizes.test
+        createdAt:
+          type: string
+          format: date-time
+          nullable: true
+        updatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        initials:
+          type: string
+          example: DF
+
+    NovaConta:
+      type: object
+      required: [fullName, email, password, passwordConfirmation]
+      properties:
+        fullName:
+          type: string
+          nullable: true
+          maxLength: 255
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 32
+        passwordConfirmation:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 32
+
+    Credenciais:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          format: password
+
+    RespostaAutenticacao:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [user, token]
+          properties:
+            user:
+              $ref: '#/components/schemas/Usuario'
+            token:
+              type: string
+              example: oat_MQ.aC1EN1BWQUZ0NFRZckctS3EyQXdab0dpZjJ5QjVXWl9pa3Jh
+
+  responses:
+    DadosInvalidos:
+      description: Corpo da requisicao reprovado na validacao
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          example:
+            error: DADOS_INVALIDOS
+            message: Os dados enviados nao passaram na validacao.
+            details:
+              - field: email
+                issue: The email field must be a valid email address
+            timestamp: '2026-02-05T12:00:00.000Z'
+            path: /api/v1/auth/signup
+            requestId: 33be9a44-6849-439c-960c-cb2d995aa732
+
+    CredenciaisInvalidas:
+      description: E-mail ou senha invalidos
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          example:
+            error: CREDENCIAIS_INVALIDAS
+            message: E-mail ou senha invalidos.
+            details: []
+            timestamp: '2026-02-05T12:00:00.000Z'
+            path: /api/v1/auth/login
+            requestId: 09acffdd-83c7-450a-9b83-4a465790e7c0
+
+    NaoAutenticado:
+      description: Token ausente ou invalido
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          example:
+            error: NAO_AUTENTICADO
+            message: Autenticacao necessaria para acessar este recurso.
+            details: []
+            timestamp: '2026-02-05T12:00:00.000Z'
+            path: /api/v1/account/profile
+            requestId: 33be9a44-6849-439c-960c-cb2d995aa732

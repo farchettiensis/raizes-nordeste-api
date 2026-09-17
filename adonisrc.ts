@@ -49,7 +49,7 @@ export default defineConfig({
     forceExit: false,
   },
 
-  metaFiles: [],
+  metaFiles: [{ pattern: 'openapi.yaml', reloadServer: false }],
 
   hooks: {
     init: [
