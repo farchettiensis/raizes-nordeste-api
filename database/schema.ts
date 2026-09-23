@@ -6,20 +6,16 @@
 
 import { BaseModel, column } from '@adonisjs/lucid/orm'
 import { DateTime } from 'luxon'
+import type { TipoMovimentoFidelidade } from '#models/fidelidade_movimento'
+import type { TipoMovimentacaoEstoque } from '#models/movimentacao_estoque'
+import type { MetodoPagamento, StatusPagamento } from '#models/pagamento'
+import type { CanalPedido, StatusPedido } from '#models/pedido'
+import type { TipoPromocao } from '#models/promocao'
+import type { FormatoUnidade } from '#models/unidade'
+import type { PerfilUsuario } from '#models/user'
 
 export class AuthAccessTokenSchema extends BaseModel {
-  static $columns = [
-    'abilities',
-    'createdAt',
-    'expiresAt',
-    'hash',
-    'id',
-    'lastUsedAt',
-    'name',
-    'tokenableId',
-    'type',
-    'updatedAt',
-  ] as const
+  static $columns = ['abilities', 'createdAt', 'expiresAt', 'hash', 'id', 'lastUsedAt', 'name', 'tokenableId', 'type', 'updatedAt'] as const
   $columns = AuthAccessTokenSchema.$columns
   @column()
   declare abilities: string
@@ -43,11 +39,317 @@ export class AuthAccessTokenSchema extends BaseModel {
   declare updatedAt: DateTime | null
 }
 
-export class UserSchema extends BaseModel {
-  static $columns = ['createdAt', 'email', 'fullName', 'id', 'password', 'updatedAt'] as const
-  $columns = UserSchema.$columns
+export class EstoqueSchema extends BaseModel {
+  static $columns = ['createdAt', 'id', 'produtoId', 'quantidade', 'quantidadeMinima', 'unidadeId', 'updatedAt'] as const
+  $columns = EstoqueSchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare produtoId: number
+  @column()
+  declare quantidade: number
+  @column()
+  declare quantidadeMinima: number
+  @column()
+  declare unidadeId: number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class FidelidadeContaSchema extends BaseModel {
+  static $columns = ['aderiuEm', 'clienteId', 'createdAt', 'id', 'saldoPontos', 'updatedAt'] as const
+  $columns = FidelidadeContaSchema.$columns
+  @column.dateTime()
+  declare aderiuEm: DateTime
+  @column()
+  declare clienteId: number
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare saldoPontos: number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class FidelidadeMovimentoSchema extends BaseModel {
+  static $columns = ['contaId', 'createdAt', 'descricao', 'id', 'pedidoId', 'pontos', 'saldoResultante', 'tipo', 'updatedAt'] as const
+  $columns = FidelidadeMovimentoSchema.$columns
+  @column()
+  declare contaId: number
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare descricao: string | null
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare pedidoId: number | null
+  @column()
+  declare pontos: number
+  @column()
+  declare saldoResultante: number
+  @column()
+  declare tipo: TipoMovimentoFidelidade
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class LogsAuditoriaSchema extends BaseModel {
+  static $columns = ['acao', 'createdAt', 'dados', 'entidade', 'entidadeId', 'id', 'ip', 'requestId', 'updatedAt', 'usuarioId'] as const
+  $columns = LogsAuditoriaSchema.$columns
+  @column()
+  declare acao: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare dados: any | null
+  @column()
+  declare entidade: string
+  @column()
+  declare entidadeId: string | null
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare ip: string | null
+  @column()
+  declare requestId: string | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare usuarioId: number | null
+}
+
+export class MovimentacoesEstoqueSchema extends BaseModel {
+  static $columns = ['createdAt', 'estoqueId', 'id', 'motivo', 'pedidoId', 'quantidade', 'saldoResultante', 'tipo', 'updatedAt', 'usuarioId'] as const
+  $columns = MovimentacoesEstoqueSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare estoqueId: number
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare motivo: string | null
+  @column()
+  declare pedidoId: number | null
+  @column()
+  declare quantidade: number
+  @column()
+  declare saldoResultante: number
+  @column()
+  declare tipo: TipoMovimentacaoEstoque
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare usuarioId: number | null
+}
+
+export class PagamentoSchema extends BaseModel {
+  static $columns = ['createdAt', 'id', 'metodo', 'motivoRecusa', 'payloadRequisicao', 'payloadResposta', 'pedidoId', 'processadoEm', 'referenciaExterna', 'status', 'updatedAt', 'valor'] as const
+  $columns = PagamentoSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare metodo: MetodoPagamento
+  @column()
+  declare motivoRecusa: string | null
+  @column()
+  declare payloadRequisicao: any | null
+  @column()
+  declare payloadResposta: any | null
+  @column()
+  declare pedidoId: number
+  @column.dateTime()
+  declare processadoEm: DateTime | null
+  @column()
+  declare referenciaExterna: string | null
+  @column()
+  declare status: StatusPagamento
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare valor: string
+}
+
+export class PedidoItenSchema extends BaseModel {
+  static $columns = ['createdAt', 'id', 'nomeProduto', 'pedidoId', 'precoUnitario', 'produtoId', 'quantidade', 'subtotal', 'updatedAt'] as const
+  $columns = PedidoItenSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare nomeProduto: string
+  @column()
+  declare pedidoId: number
+  @column()
+  declare precoUnitario: string
+  @column()
+  declare produtoId: number
+  @column()
+  declare quantidade: number
+  @column()
+  declare subtotal: string
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class PedidoSchema extends BaseModel {
+  static $columns = ['canalPedido', 'canceladoEm', 'clienteId', 'codigo', 'createdAt', 'desconto', 'id', 'observacoes', 'pontosGerados', 'status', 'subtotal', 'total', 'unidadeId', 'updatedAt'] as const
+  $columns = PedidoSchema.$columns
+  @column()
+  declare canalPedido: CanalPedido
+  @column.dateTime()
+  declare canceladoEm: DateTime | null
+  @column()
+  declare clienteId: number | null
+  @column()
+  declare codigo: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare desconto: string
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare observacoes: string | null
+  @column()
+  declare pontosGerados: number
+  @column()
+  declare status: StatusPedido
+  @column()
+  declare subtotal: string
+  @column()
+  declare total: string
+  @column()
+  declare unidadeId: number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class ProdutoSchema extends BaseModel {
+  static $columns = ['ativo', 'categoria', 'codigo', 'createdAt', 'descricao', 'id', 'nome', 'precoBase', 'sazonal', 'updatedAt'] as const
+  $columns = ProdutoSchema.$columns
+  @column()
+  declare ativo: boolean
+  @column()
+  declare categoria: string
+  @column()
+  declare codigo: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare descricao: string | null
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare nome: string
+  @column()
+  declare precoBase: string
+  @column()
+  declare sazonal: boolean
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class PromocoeSchema extends BaseModel {
+  static $columns = ['ativa', 'canalPedido', 'codigo', 'createdAt', 'id', 'iniciaEm', 'nome', 'terminaEm', 'tipo', 'unidadeId', 'updatedAt', 'valor', 'valorMinimoPedido'] as const
+  $columns = PromocoeSchema.$columns
+  @column()
+  declare ativa: boolean
+  @column()
+  declare canalPedido: CanalPedido | null
+  @column()
+  declare codigo: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column({ isPrimary: true })
+  declare id: number
+  @column.dateTime()
+  declare iniciaEm: DateTime
+  @column()
+  declare nome: string
+  @column.dateTime()
+  declare terminaEm: DateTime
+  @column()
+  declare tipo: TipoPromocao
+  @column()
+  declare unidadeId: number | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+  @column()
+  declare valor: string
+  @column()
+  declare valorMinimoPedido: string
+}
+
+export class UnidadeProdutoSchema extends BaseModel {
+  static $columns = ['createdAt', 'disponivel', 'id', 'preco', 'produtoId', 'unidadeId', 'updatedAt'] as const
+  $columns = UnidadeProdutoSchema.$columns
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare disponivel: boolean
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare preco: string
+  @column()
+  declare produtoId: number
+  @column()
+  declare unidadeId: number
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class UnidadeSchema extends BaseModel {
+  static $columns = ['ativa', 'cidade', 'codigo', 'createdAt', 'endereco', 'estado', 'formato', 'id', 'nome', 'telefone', 'updatedAt'] as const
+  $columns = UnidadeSchema.$columns
+  @column()
+  declare ativa: boolean
+  @column()
+  declare cidade: string
+  @column()
+  declare codigo: string
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column()
+  declare endereco: string
+  @column()
+  declare estado: string
+  @column()
+  declare formato: FormatoUnidade
+  @column({ isPrimary: true })
+  declare id: number
+  @column()
+  declare nome: string
+  @column()
+  declare telefone: string | null
+  @column.dateTime({ autoCreate: true, autoUpdate: true })
+  declare updatedAt: DateTime | null
+}
+
+export class UserSchema extends BaseModel {
+  static $columns = ['anonimizadoEm', 'consentimentoDadosEm', 'consentimentoFidelidadeEm', 'consentimentoMarketingEm', 'createdAt', 'dataNascimento', 'email', 'fullName', 'id', 'password', 'perfil', 'telefone', 'unidadeId', 'updatedAt'] as const
+  $columns = UserSchema.$columns
+  @column.dateTime()
+  declare anonimizadoEm: DateTime | null
+  @column.dateTime()
+  declare consentimentoDadosEm: DateTime | null
+  @column.dateTime()
+  declare consentimentoFidelidadeEm: DateTime | null
+  @column.dateTime()
+  declare consentimentoMarketingEm: DateTime | null
+  @column.dateTime({ autoCreate: true })
+  declare createdAt: DateTime
+  @column.date()
+  declare dataNascimento: DateTime | null
   @column()
   declare email: string
   @column()
@@ -56,6 +358,12 @@ export class UserSchema extends BaseModel {
   declare id: number
   @column({ serializeAs: null })
   declare password: string
+  @column()
+  declare perfil: PerfilUsuario
+  @column()
+  declare telefone: string | null
+  @column()
+  declare unidadeId: number | null
   @column.dateTime({ autoCreate: true, autoUpdate: true })
   declare updatedAt: DateTime | null
 }
