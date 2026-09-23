@@ -36,6 +36,24 @@ const routes = {
     tokens: [{"old":"/api/v1/auth/login","type":0,"val":"api","end":""},{"old":"/api/v1/auth/login","type":0,"val":"v1","end":""},{"old":"/api/v1/auth/login","type":0,"val":"auth","end":""},{"old":"/api/v1/auth/login","type":0,"val":"login","end":""}],
     types: placeholder as Registry['auth.access_tokens.store']['types'],
   },
+  'unidades.unidades.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/unidades',
+    tokens: [{"old":"/api/v1/unidades","type":0,"val":"api","end":""},{"old":"/api/v1/unidades","type":0,"val":"v1","end":""},{"old":"/api/v1/unidades","type":0,"val":"unidades","end":""}],
+    types: placeholder as Registry['unidades.unidades.index']['types'],
+  },
+  'unidades.unidades.show': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/unidades/:id',
+    tokens: [{"old":"/api/v1/unidades/:id","type":0,"val":"api","end":""},{"old":"/api/v1/unidades/:id","type":0,"val":"v1","end":""},{"old":"/api/v1/unidades/:id","type":0,"val":"unidades","end":""},{"old":"/api/v1/unidades/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['unidades.unidades.show']['types'],
+  },
+  'unidades.cardapios.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/unidades/:id/cardapio',
+    tokens: [{"old":"/api/v1/unidades/:id/cardapio","type":0,"val":"api","end":""},{"old":"/api/v1/unidades/:id/cardapio","type":0,"val":"v1","end":""},{"old":"/api/v1/unidades/:id/cardapio","type":0,"val":"unidades","end":""},{"old":"/api/v1/unidades/:id/cardapio","type":1,"val":"id","end":""},{"old":"/api/v1/unidades/:id/cardapio","type":0,"val":"cardapio","end":""}],
+    types: placeholder as Registry['unidades.cardapios.index']['types'],
+  },
   'profile.profile.show': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/account/profile',

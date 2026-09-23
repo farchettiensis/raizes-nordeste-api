@@ -20,6 +20,8 @@ tags:
     description: Cadastro, login e logout
   - name: Conta
     description: Dados da conta autenticada
+  - name: Unidades
+    description: Unidades da rede e o cardápio de cada uma
 
 security:
   - bearerAuth: []
@@ -113,7 +115,136 @@ paths:
         '401':
           $ref: '#/components/responses/NaoAutenticado'
 
+  /api/v1/unidades:
+    get:
+      tags: [Unidades]
+      summary: Lista as unidades da rede
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: estado
+          in: query
+          description: Sigla da unidade federativa, com duas letras
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 2
+            example: PE
+        - name: cidade
+          in: query
+          description: Trecho do nome da cidade, sem diferenciar maiúsculas
+          schema:
+            type: string
+            example: Recife
+        - name: ativa
+          in: query
+          description: Filtra por unidades ativas ou inativas. Sem o parâmetro, devolve todas
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Lista paginada de unidades
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, metadata]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Unidade'
+                  metadata:
+                    $ref: '#/components/schemas/PaginationMetadata'
+        '422':
+          $ref: '#/components/responses/DadosInvalidos'
+
+  /api/v1/unidades/{id}:
+    get:
+      tags: [Unidades]
+      summary: Devolve uma unidade da rede
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/UnidadeId'
+      responses:
+        '200':
+          description: Dados da unidade
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Unidade'
+        '404':
+          $ref: '#/components/responses/RecursoNaoEncontrado'
+
+  /api/v1/unidades/{id}/cardapio:
+    get:
+      tags: [Unidades]
+      summary: Lista o cardápio de uma unidade
+      description: |
+        Devolve os produtos ofertados pela unidade, com o preço praticado ali.
+
+        O campo `disponivel` combina três condições: o item estar liberado no
+        cardápio da unidade, o produto estar ativo na rede e haver saldo em
+        estoque naquela unidade. Um item indisponível continua aparecendo na
+        listagem, para que o cliente saiba que ele existe.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/UnidadeId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Cardápio paginado, ordenado pelo nome do produto
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, metadata]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ItemDoCardapio'
+                  metadata:
+                    $ref: '#/components/schemas/PaginationMetadata'
+        '404':
+          $ref: '#/components/responses/RecursoNaoEncontrado'
+        '422':
+          $ref: '#/components/responses/DadosInvalidos'
+
 components:
+  parameters:
+    Page:
+      name: page
+      in: query
+      description: Página desejada, começando em 1
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    Limit:
+      name: limit
+      in: query
+      description: Quantidade de itens por página
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 10
+    UnidadeId:
+      name: id
+      in: path
+      required: true
+      description: Identificador da unidade
+      schema:
+        type: integer
+        example: 1
+
   securitySchemes:
     bearerAuth:
       type: http
@@ -121,6 +252,104 @@ components:
       description: Token de acesso devolvido por signup ou login
 
   schemas:
+    PaginationMetadata:
+      type: object
+      required: [total, perPage, currentPage, lastPage]
+      properties:
+        total:
+          type: integer
+          example: 4
+        perPage:
+          type: integer
+          example: 10
+        currentPage:
+          type: integer
+          example: 1
+        lastPage:
+          type: integer
+          example: 1
+        firstPage:
+          type: integer
+          example: 1
+        firstPageUrl:
+          type: string
+          example: /?page=1
+        lastPageUrl:
+          type: string
+          example: /?page=1
+        nextPageUrl:
+          type: string
+          nullable: true
+        previousPageUrl:
+          type: string
+          nullable: true
+
+    Unidade:
+      type: object
+      required: [id, codigo, nome, formato, cidade, estado, endereco, ativa]
+      properties:
+        id:
+          type: integer
+          example: 1
+        codigo:
+          type: string
+          example: REC001
+        nome:
+          type: string
+          example: Raízes Boa Viagem
+        formato:
+          type: string
+          enum: [COMPLETA, REDUZIDA]
+          description: COMPLETA para cozinha completa, REDUZIDA para o formato enxuto
+        cidade:
+          type: string
+          example: Recife
+        estado:
+          type: string
+          example: PE
+        endereco:
+          type: string
+          example: Av. Boa Viagem, 1200
+        telefone:
+          type: string
+          nullable: true
+          example: '8133334444'
+        ativa:
+          type: boolean
+          example: true
+
+    ItemDoCardapio:
+      type: object
+      required: [produtoId, codigo, nome, categoria, sazonal, preco, disponivel]
+      properties:
+        produtoId:
+          type: integer
+          example: 1
+        codigo:
+          type: string
+          example: TAP001
+        nome:
+          type: string
+          example: Tapioca de carne de sol com queijo coalho
+        descricao:
+          type: string
+          nullable: true
+        categoria:
+          type: string
+          example: TAPIOCA
+        sazonal:
+          type: boolean
+          description: Produto ofertado apenas em determinada época do ano
+          example: false
+        preco:
+          type: string
+          description: Preço praticado nesta unidade, em reais
+          example: '22.00'
+        disponivel:
+          type: boolean
+          description: Liberado no cardápio, produto ativo e com saldo em estoque
+          example: true
+
     DetalheErro:
       type: object
       required: [field, issue]
@@ -265,6 +494,20 @@ components:
             timestamp: '2026-02-05T12:00:00.000Z'
             path: /api/v1/auth/login
             requestId: 09acffdd-83c7-450a-9b83-4a465790e7c0
+
+    RecursoNaoEncontrado:
+      description: O recurso solicitado não existe
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          example:
+            error: RECURSO_NAO_ENCONTRADO
+            message: O recurso solicitado nao foi encontrado.
+            details: []
+            timestamp: '2026-02-05T12:00:00.000Z'
+            path: /api/v1/unidades/999
+            requestId: 3e01d106-5f6e-4888-a9a5-0ab2e4e21f27
 
     NaoAutenticado:
       description: Token ausente ou invalido

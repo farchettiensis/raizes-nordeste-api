@@ -9,6 +9,9 @@ export type ScannedRoutes = {
     'docs.asset': { paramsTuple: [ParamValue]; params: {'file': ParamValue} }
     'auth.new_account.store': { paramsTuple?: []; params?: {} }
     'auth.access_tokens.store': { paramsTuple?: []; params?: {} }
+    'unidades.unidades.index': { paramsTuple?: []; params?: {} }
+    'unidades.unidades.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'unidades.cardapios.index': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'profile.profile.show': { paramsTuple?: []; params?: {} }
     'profile.access_tokens.destroy': { paramsTuple?: []; params?: {} }
   }
@@ -16,12 +19,18 @@ export type ScannedRoutes = {
     'docs.index': { paramsTuple?: []; params?: {} }
     'docs.spec': { paramsTuple?: []; params?: {} }
     'docs.asset': { paramsTuple: [ParamValue]; params: {'file': ParamValue} }
+    'unidades.unidades.index': { paramsTuple?: []; params?: {} }
+    'unidades.unidades.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'unidades.cardapios.index': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'profile.profile.show': { paramsTuple?: []; params?: {} }
   }
   HEAD: {
     'docs.index': { paramsTuple?: []; params?: {} }
     'docs.spec': { paramsTuple?: []; params?: {} }
     'docs.asset': { paramsTuple: [ParamValue]; params: {'file': ParamValue} }
+    'unidades.unidades.index': { paramsTuple?: []; params?: {} }
+    'unidades.unidades.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'unidades.cardapios.index': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'profile.profile.show': { paramsTuple?: []; params?: {} }
   }
   POST: {

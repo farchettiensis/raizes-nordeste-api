@@ -20,6 +20,15 @@ router
 
     router
       .group(() => {
+        router.get('/', [controllers.Unidades, 'index'])
+        router.get(':id', [controllers.Unidades, 'show'])
+        router.get(':id/cardapio', [controllers.Cardapios, 'index'])
+      })
+      .prefix('unidades')
+      .as('unidades')
+
+    router
+      .group(() => {
         router.get('profile', [controllers.Profile, 'show'])
         router.post('logout', [controllers.AccessTokens, 'destroy'])
       })

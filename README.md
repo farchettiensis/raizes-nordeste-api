@@ -64,6 +64,26 @@ O contrato fica em [`openapi.yaml`](openapi.yaml), na raiz do projeto, e é serv
 
 O documento é escrito à mão, e não gerado por biblioteca. Em troca disso, um teste automatizado compara os caminhos declarados no `openapi.yaml` com as rotas realmente registradas no router e falha se as duas listas divergirem, de modo que o contrato não envelhece em silêncio.
 
+## Endpoints
+
+O Swagger em `/docs` traz os exemplos de request e response de cada um. Esta tabela é só um mapa rápido.
+
+| Método | Rota | Auth | O que faz |
+|---:|:---|:---|:---|
+| GET | `/` | pública | Redireciona para a documentação |
+| GET | `/docs` | pública | Swagger UI |
+| POST | `/api/v1/auth/signup` | pública | Cria conta e devolve token |
+| POST | `/api/v1/auth/login` | pública | Autentica e devolve token |
+| GET | `/api/v1/account/profile` | token | Dados da conta autenticada |
+| POST | `/api/v1/account/logout` | token | Revoga o token em uso |
+| GET | `/api/v1/unidades` | pública | Lista unidades, com filtros e paginação |
+| GET | `/api/v1/unidades/:id` | pública | Detalhe de uma unidade |
+| GET | `/api/v1/unidades/:id/cardapio` | pública | Cardápio da unidade, com preço e disponibilidade |
+
+Listagens aceitam `?page=1&limit=10` e respondem `{ "data": [...], "metadata": { ... } }`.
+
+Consultar unidades e cardápio é público de propósito: na jornada do caso, o cliente vê o cardápio da unidade antes de se identificar.
+
 ## Padrão de erro
 
 Toda falha, em qualquer endpoint, responde com o mesmo corpo:

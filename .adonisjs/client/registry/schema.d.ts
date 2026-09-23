@@ -67,6 +67,42 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/access_tokens_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'unidades.unidades.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/unidades'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: ExtractQueryForGet<InferInput<(typeof import('#validators/unidade').listarUnidadesValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/unidades_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/unidades_controller').default['index']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'unidades.unidades.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/unidades/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/unidades_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/unidades_controller').default['show']>>>
+    }
+  }
+  'unidades.cardapios.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/unidades/:id/cardapio'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: ExtractQueryForGet<InferInput<(typeof import('#validators/unidade').listarCardapioValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/cardapios_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/cardapios_controller').default['index']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'profile.profile.show': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/account/profile'

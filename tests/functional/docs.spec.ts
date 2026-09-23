@@ -19,6 +19,10 @@ function documentedOperations(document: OpenApiDocument) {
   )
 }
 
+function comoCaminhoOpenApi(pattern: string) {
+  return pattern.replace(/:(\w+)/g, '{$1}')
+}
+
 function registeredOperations() {
   return router
     .toJSON()
@@ -26,7 +30,7 @@ function registeredOperations() {
     .flatMap((route) =>
       route.methods
         .filter((method) => method !== 'HEAD')
-        .map((method) => `${method} ${route.pattern}`)
+        .map((method) => `${method} ${comoCaminhoOpenApi(route.pattern)}`)
     )
 }
 

@@ -15,6 +15,15 @@ export interface ApiDefinition {
       store: typeof routes['auth.access_tokens.store']
     }
   }
+  unidades: {
+    unidades: {
+      index: typeof routes['unidades.unidades.index']
+      show: typeof routes['unidades.unidades.show']
+    }
+    cardapios: {
+      index: typeof routes['unidades.cardapios.index']
+    }
+  }
   profile: {
     profile: {
       show: typeof routes['profile.profile.show']
