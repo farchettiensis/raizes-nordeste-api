@@ -36,14 +36,25 @@ createdb -h 127.0.0.1 -U postgres raizes_nordeste
 createdb -h 127.0.0.1 -U postgres raizes_nordeste_test
 ```
 
-Rode as migrations e suba a API:
+Rode as migrations, popule os dados de demonstração e suba a API:
 
 ```bash
 node ace migration:run
+node ace db:seed
 npm run dev
 ```
 
 A API sobe em `http://localhost:3333`.
+
+O seeder cria quatro unidades (uma delas inativa, de propósito), oito produtos, o cardápio e o estoque de cada unidade, e um usuário para cada perfil. Rodá-lo mais de uma vez não duplica nada. Todas as contas usam a senha `Senha@123`:
+
+| E-mail | Perfil |
+|---|---|
+| `admin@raizes.test` | ADMIN |
+| `gerente@raizes.test` | GERENTE |
+| `atendente@raizes.test` | ATENDENTE |
+| `cozinha@raizes.test` | COZINHA |
+| `cliente@raizes.test` | CLIENTE |
 
 ## Documentação da API
 
@@ -83,7 +94,9 @@ npm run format      # Prettier
 
 node ace migration:run      # aplica as migrations pendentes
 node ace migration:fresh    # recria o banco do zero
+node ace db:seed            # popula os dados de demonstração
 node ace list:routes        # lista as rotas registradas
+node ace codegen            # regenera os tipos de rotas e controllers
 ```
 
 Os testes usam o banco `raizes_nordeste_test`, definido em `.env.test`. As migrations rodam e são revertidas automaticamente a cada execução, e cada teste começa com as tabelas limpas.
