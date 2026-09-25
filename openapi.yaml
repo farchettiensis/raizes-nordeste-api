@@ -21,7 +21,7 @@ tags:
   - name: Conta
     description: Dados da conta autenticada
   - name: Unidades
-    description: Unidades da rede e o cardápio de cada uma
+    description: Unidades da rede, o cardápio e o estoque de cada uma
 
 security:
   - bearerAuth: []
@@ -217,6 +217,45 @@ paths:
         '422':
           $ref: '#/components/responses/DadosInvalidos'
 
+  /api/v1/unidades/{id}/estoque:
+    get:
+      tags: [Unidades]
+      summary: Lista o saldo de estoque de uma unidade
+      description: |
+        Devolve a posicao de estoque da unidade, produto a produto, com a
+        quantidade em maos e a quantidade minima definida para reposicao.
+
+        Endpoint restrito a equipe da operacao: ATENDENTE, COZINHA, GERENTE e
+        ADMIN. Um CLIENTE autenticado recebe 403, porque a disponibilidade que
+        interessa a ele ja aparece no cardapio publico da unidade.
+      parameters:
+        - $ref: '#/components/parameters/UnidadeId'
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Saldo paginado, ordenado pelo nome do produto
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, metadata]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SaldoDeEstoque'
+                  metadata:
+                    $ref: '#/components/schemas/PaginationMetadata'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          $ref: '#/components/responses/RecursoNaoEncontrado'
+        '422':
+          $ref: '#/components/responses/DadosInvalidos'
+
 components:
   parameters:
     Page:
@@ -349,6 +388,35 @@ components:
           type: boolean
           description: Liberado no cardápio, produto ativo e com saldo em estoque
           example: true
+
+    SaldoDeEstoque:
+      type: object
+      required: [produtoId, codigo, nome, categoria, quantidade, quantidadeMinima, abaixoDoMinimo]
+      properties:
+        produtoId:
+          type: integer
+          example: 1
+        codigo:
+          type: string
+          example: CUS001
+        nome:
+          type: string
+          example: Cuscuz recheado de frango com catupiry
+        categoria:
+          type: string
+          example: CUSCUZ
+        quantidade:
+          type: integer
+          description: Saldo atual na unidade
+          example: 12
+        quantidadeMinima:
+          type: integer
+          description: Saldo a partir do qual a unidade precisa repor
+          example: 2
+        abaixoDoMinimo:
+          type: boolean
+          description: Verdadeiro quando o saldo atingiu ou passou do minimo
+          example: false
 
     DetalheErro:
       type: object
@@ -508,6 +576,20 @@ components:
             timestamp: '2026-02-05T12:00:00.000Z'
             path: /api/v1/unidades/999
             requestId: 3e01d106-5f6e-4888-a9a5-0ab2e4e21f27
+
+    SemPermissao:
+      description: O perfil autenticado nao tem permissao para a acao
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          example:
+            error: SEM_PERMISSAO
+            message: Seu perfil nao tem permissao para esta acao.
+            details: []
+            timestamp: '2026-02-05T12:00:00.000Z'
+            path: /api/v1/unidades/1/estoque
+            requestId: 6f1a0e8c-2c2f-4a8a-9f32-9f0e1d4b7a55
 
     NaoAutenticado:
       description: Token ausente ou invalido

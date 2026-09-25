@@ -7,6 +7,7 @@ export const controllers = {
   AccessTokens: () => import('#controllers/access_tokens_controller'),
   Cardapios: () => import('#controllers/cardapios_controller'),
   Docs: () => import('#controllers/docs_controller'),
+  Estoques: () => import('#controllers/estoques_controller'),
   NewAccount: () => import('#controllers/new_account_controller'),
   Profile: () => import('#controllers/profile_controller'),
   Unidades: () => import('#controllers/unidades_controller'),

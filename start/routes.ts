@@ -2,6 +2,8 @@ import { middleware } from '#start/kernel'
 import router from '@adonisjs/core/services/router'
 import { controllers } from '#generated/controllers'
 
+import { PERFIS_DA_OPERACAO } from '#models/user'
+
 router.get('/', ({ response }) => response.redirect('/docs'))
 
 router.get('/docs', [controllers.Docs, 'index'])
@@ -23,6 +25,9 @@ router
         router.get('/', [controllers.Unidades, 'index'])
         router.get(':id', [controllers.Unidades, 'show'])
         router.get(':id/cardapio', [controllers.Cardapios, 'index'])
+        router
+          .get(':id/estoque', [controllers.Estoques, 'index'])
+          .use(middleware.perfil({ perfis: PERFIS_DA_OPERACAO }))
       })
       .prefix('unidades')
       .as('unidades')

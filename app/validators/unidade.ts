@@ -15,3 +15,8 @@ export const listarCardapioValidator = vine.create({
   page: page(),
   limit: limit(),
 })
+
+export const listarEstoqueValidator = vine.create({
+  page: page(),
+  limit: limit(),
+})
