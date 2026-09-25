@@ -79,10 +79,27 @@ O Swagger em `/docs` traz os exemplos de request e response de cada um. Esta tab
 | GET | `/api/v1/unidades` | pública | Lista unidades, com filtros e paginação |
 | GET | `/api/v1/unidades/:id` | pública | Detalhe de uma unidade |
 | GET | `/api/v1/unidades/:id/cardapio` | pública | Cardápio da unidade, com preço e disponibilidade |
+| GET | `/api/v1/unidades/:id/estoque` | token, perfis da operação | Saldo de estoque da unidade, produto a produto |
 
 Listagens aceitam `?page=1&limit=10` e respondem `{ "data": [...], "metadata": { ... } }`.
 
 Consultar unidades e cardápio é público de propósito: na jornada do caso, o cliente vê o cardápio da unidade antes de se identificar.
+
+## Autorização por perfil
+
+Cada usuário tem um perfil (`CLIENTE`, `ATENDENTE`, `COZINHA`, `GERENTE`, `ADMIN`), e o middleware nomeado `perfil` restringe a rota aos perfis que ela aceita:
+
+```ts
+router
+  .get(':id/estoque', [controllers.Estoques, 'index'])
+  .use(middleware.perfil({ perfis: PERFIS_DA_OPERACAO }))
+```
+
+Sem token, a resposta é `401 NAO_AUTENTICADO`. Com token de um perfil que a rota não aceita, é `403 SEM_PERMISSAO`, no mesmo corpo padronizado de qualquer outra falha. O perfil é conferido antes de o controller rodar, então um perfil sem permissão não descobre nem se o recurso existe.
+
+O saldo de estoque fica restrito a quem opera a unidade porque o que interessa ao cliente, se o produto está disponível, ele já vê no cardápio público, sem saber quantas unidades restam.
+
+A autorização é por perfil, não por posse do recurso: hoje um gerente consegue consultar o estoque de qualquer unidade, não só da sua. Restringir o acesso à unidade do próprio vínculo (`users.unidade_id`) é o passo seguinte, e não está implementado.
 
 ## Padrão de erro
 
