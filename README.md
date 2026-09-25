@@ -44,7 +44,7 @@ node ace db:seed
 npm run dev
 ```
 
-A API sobe em `http://localhost:3333`.
+A API sobe na URL impressa na inicialização, em geral `http://localhost:3333`. Se a porta do `.env` estiver ocupada, o Adonis escolhe outra, então use sempre a URL do console.
 
 O seeder cria quatro unidades (uma delas inativa, de propósito), oito produtos, o cardápio e o estoque de cada unidade, e um usuário para cada perfil. Rodá-lo mais de uma vez não duplica nada. Todas as contas usam a senha `Senha@123`:
 
@@ -58,7 +58,7 @@ O seeder cria quatro unidades (uma delas inativa, de propósito), oito produtos,
 
 ## Documentação da API
 
-Com o servidor rodando, abra `http://localhost:3333/docs`. A raiz `/` redireciona para lá.
+Com o servidor rodando, abra `/docs` na URL impressa na inicialização. A raiz `/` redireciona para lá.
 
 O contrato fica em [`openapi.yaml`](openapi.yaml), na raiz do projeto, e é servido em `/docs/openapi.yaml`. O Swagger UI é servido a partir do pacote instalado localmente, sem depender de CDN, então a documentação funciona offline.
 
