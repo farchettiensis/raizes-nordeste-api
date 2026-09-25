@@ -16,6 +16,8 @@ export type PerfilUsuario = (typeof PERFIS_USUARIO)[number]
 
 export const PERFIS_DA_UNIDADE: PerfilUsuario[] = ['ATENDENTE', 'COZINHA', 'GERENTE']
 
+export const PERFIS_DA_OPERACAO: PerfilUsuario[] = [...PERFIS_DA_UNIDADE, 'ADMIN']
+
 export default class User extends compose(UserSchema, withAuthFinder(hash)) {
   static table = 'users'
   static accessTokens = DbAccessTokensProvider.forModel(User)

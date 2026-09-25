@@ -32,10 +32,6 @@ const KNOWN_ERRORS: Record<string, KnownError> = {
     error: 'NAO_AUTENTICADO',
     message: 'Autenticacao necessaria para acessar este recurso.',
   },
-  E_AUTHORIZATION_FAILURE: {
-    error: 'SEM_PERMISSAO',
-    message: 'Seu perfil nao tem permissao para esta acao.',
-  },
   E_ROUTE_NOT_FOUND: {
     error: 'ROTA_NAO_ENCONTRADA',
     message: 'A rota solicitada nao existe.',
