@@ -21,6 +21,9 @@ yarn-error.log
 .fleet
 .idea
 .vscode
+*.swp
+*.swo
+*~
 
 # Platform specific
 .DS_Store
