@@ -12,6 +12,7 @@ export type ScannedRoutes = {
     'unidades.unidades.index': { paramsTuple?: []; params?: {} }
     'unidades.unidades.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'unidades.cardapios.index': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'unidades.estoques.index': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'profile.profile.show': { paramsTuple?: []; params?: {} }
     'profile.access_tokens.destroy': { paramsTuple?: []; params?: {} }
   }
@@ -22,6 +23,7 @@ export type ScannedRoutes = {
     'unidades.unidades.index': { paramsTuple?: []; params?: {} }
     'unidades.unidades.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'unidades.cardapios.index': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'unidades.estoques.index': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'profile.profile.show': { paramsTuple?: []; params?: {} }
   }
   HEAD: {
@@ -31,6 +33,7 @@ export type ScannedRoutes = {
     'unidades.unidades.index': { paramsTuple?: []; params?: {} }
     'unidades.unidades.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'unidades.cardapios.index': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'unidades.estoques.index': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'profile.profile.show': { paramsTuple?: []; params?: {} }
   }
   POST: {

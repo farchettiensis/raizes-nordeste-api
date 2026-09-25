@@ -23,6 +23,9 @@ export interface ApiDefinition {
     cardapios: {
       index: typeof routes['unidades.cardapios.index']
     }
+    estoques: {
+      index: typeof routes['unidades.estoques.index']
+    }
   }
   profile: {
     profile: {

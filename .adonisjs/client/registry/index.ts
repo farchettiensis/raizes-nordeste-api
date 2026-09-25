@@ -54,6 +54,12 @@ const routes = {
     tokens: [{"old":"/api/v1/unidades/:id/cardapio","type":0,"val":"api","end":""},{"old":"/api/v1/unidades/:id/cardapio","type":0,"val":"v1","end":""},{"old":"/api/v1/unidades/:id/cardapio","type":0,"val":"unidades","end":""},{"old":"/api/v1/unidades/:id/cardapio","type":1,"val":"id","end":""},{"old":"/api/v1/unidades/:id/cardapio","type":0,"val":"cardapio","end":""}],
     types: placeholder as Registry['unidades.cardapios.index']['types'],
   },
+  'unidades.estoques.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/unidades/:id/estoque',
+    tokens: [{"old":"/api/v1/unidades/:id/estoque","type":0,"val":"api","end":""},{"old":"/api/v1/unidades/:id/estoque","type":0,"val":"v1","end":""},{"old":"/api/v1/unidades/:id/estoque","type":0,"val":"unidades","end":""},{"old":"/api/v1/unidades/:id/estoque","type":1,"val":"id","end":""},{"old":"/api/v1/unidades/:id/estoque","type":0,"val":"estoque","end":""}],
+    types: placeholder as Registry['unidades.estoques.index']['types'],
+  },
   'profile.profile.show': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/account/profile',

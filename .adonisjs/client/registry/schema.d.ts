@@ -103,6 +103,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/cardapios_controller').default['index']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'unidades.estoques.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/unidades/:id/estoque'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: ExtractQueryForGet<InferInput<(typeof import('#validators/unidade').listarEstoqueValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/estoques_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/estoques_controller').default['index']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'profile.profile.show': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/account/profile'
