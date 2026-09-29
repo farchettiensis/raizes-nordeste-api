@@ -44,7 +44,7 @@ paths:
               password: Senha@123
               passwordConfirmation: Senha@123
       responses:
-        '200':
+        '201':
           description: Conta criada
           content:
             application/json:
