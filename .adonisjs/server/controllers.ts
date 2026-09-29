@@ -9,6 +9,7 @@ export const controllers = {
   Docs: () => import('#controllers/docs_controller'),
   Estoques: () => import('#controllers/estoques_controller'),
   NewAccount: () => import('#controllers/new_account_controller'),
+  Pedidos: () => import('#controllers/pedidos_controller'),
   Profile: () => import('#controllers/profile_controller'),
   Unidades: () => import('#controllers/unidades_controller'),
 }
