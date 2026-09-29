@@ -22,6 +22,8 @@ tags:
     description: Dados da conta autenticada
   - name: Unidades
     description: Unidades da rede, o cardápio e o estoque de cada uma
+  - name: Pedidos
+    description: Criacao de pedidos, com validacao de cardapio e estoque da unidade
 
 security:
   - bearerAuth: []
@@ -256,6 +258,63 @@ paths:
         '422':
           $ref: '#/components/responses/DadosInvalidos'
 
+  /api/v1/pedidos:
+    post:
+      tags: [Pedidos]
+      summary: Cria um pedido validando o cardapio e o estoque da unidade
+      description: |
+        Cria o pedido em AGUARDANDO_PAGAMENTO para o CLIENTE autenticado. O
+        cliente vem do token, nunca do corpo da requisicao.
+
+        Cada item guarda o nome e o preco praticado na unidade no momento do
+        pedido, e o total e calculado no servidor. O estoque e baixado na
+        criacao, com uma movimentacao de SAIDA por item vinculada ao pedido.
+
+        Os saldos dos produtos do pedido ficam bloqueados (SELECT ... FOR
+        UPDATE) durante a transacao, entao dois pedidos simultaneos pela ultima
+        unidade de um produto nunca sao aceitos ao mesmo tempo: um e criado e
+        o outro recebe 409.
+
+        As verificacoes seguem esta ordem e cada uma aponta todos os itens com
+        problema: unidade inexistente (404) ou inativa (409), produto fora do
+        cardapio da unidade (404), produto indisponivel (409) e estoque
+        insuficiente (409).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NovoPedido'
+            example:
+              unidadeId: 1
+              canalPedido: TOTEM
+              itens:
+                - produtoId: 1
+                  quantidade: 2
+                - produtoId: 5
+                  quantidade: 1
+      responses:
+        '201':
+          description: Pedido criado, aguardando pagamento
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Pedido'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          $ref: '#/components/responses/PedidoComRecursoInexistente'
+        '409':
+          $ref: '#/components/responses/PedidoEmConflito'
+        '422':
+          $ref: '#/components/responses/DadosInvalidos'
+
 components:
   parameters:
     Page:
@@ -417,6 +476,112 @@ components:
           type: boolean
           description: Verdadeiro quando o saldo atingiu ou passou do minimo
           example: false
+
+    NovoPedido:
+      type: object
+      required: [unidadeId, canalPedido, itens]
+      properties:
+        unidadeId:
+          type: integer
+          example: 1
+        canalPedido:
+          type: string
+          enum: [APP, TOTEM, BALCAO, PICKUP, WEB]
+          description: Canal por onde o pedido entrou
+          example: TOTEM
+        itens:
+          type: array
+          minItems: 1
+          description: Cada produto aparece uma unica vez
+          items:
+            type: object
+            required: [produtoId, quantidade]
+            properties:
+              produtoId:
+                type: integer
+                example: 1
+              quantidade:
+                type: integer
+                minimum: 1
+                maximum: 99
+                example: 2
+        observacoes:
+          type: string
+          maxLength: 500
+          example: Sem cebola
+
+    ItemDoPedido:
+      type: object
+      required: [produtoId, nome, quantidade, precoUnitario, subtotal]
+      properties:
+        produtoId:
+          type: integer
+          example: 1
+        nome:
+          type: string
+          description: Nome do produto no momento do pedido
+          example: Tapioca de carne de sol com queijo coalho
+        quantidade:
+          type: integer
+          example: 2
+        precoUnitario:
+          type: string
+          description: Preco praticado na unidade no momento do pedido
+          example: '18.90'
+        subtotal:
+          type: string
+          example: '37.80'
+
+    Pedido:
+      type: object
+      required:
+        [
+          pedidoId,
+          codigo,
+          unidadeId,
+          canalPedido,
+          status,
+          subtotal,
+          desconto,
+          total,
+          itens,
+          createdAt,
+        ]
+      properties:
+        pedidoId:
+          type: integer
+          example: 9001
+        codigo:
+          type: string
+          example: PED260205A1B2C3D4
+        unidadeId:
+          type: integer
+          example: 1
+        canalPedido:
+          type: string
+          enum: [APP, TOTEM, BALCAO, PICKUP, WEB]
+          example: TOTEM
+        status:
+          type: string
+          enum: [AGUARDANDO_PAGAMENTO, PAGO, EM_PREPARO, PRONTO, ENTREGUE, CANCELADO]
+          example: AGUARDANDO_PAGAMENTO
+        subtotal:
+          type: string
+          example: '60.15'
+        desconto:
+          type: string
+          example: '0.00'
+        total:
+          type: string
+          example: '60.15'
+        itens:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemDoPedido'
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-02-05T12:00:00.000Z'
 
     DetalheErro:
       type: object
@@ -604,3 +769,68 @@ components:
             timestamp: '2026-02-05T12:00:00.000Z'
             path: /api/v1/account/profile
             requestId: 33be9a44-6849-439c-960c-cb2d995aa732
+
+    PedidoComRecursoInexistente:
+      description: Unidade inexistente ou produto fora do cardapio da unidade
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          examples:
+            unidade:
+              value:
+                error: UNIDADE_NAO_ENCONTRADA
+                message: A unidade informada nao existe.
+                details:
+                  - field: unidadeId
+                    issue: Unidade 999 nao encontrada
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/pedidos
+                requestId: 1b7c2d3e-4f50-4a61-8b72-9c83d4e5f607
+            produto:
+              value:
+                error: PRODUTO_NAO_ENCONTRADO
+                message: Um ou mais produtos nao existem no cardapio da unidade.
+                details:
+                  - field: itens[0].produtoId
+                    issue: Produto 999 fora do cardapio da unidade
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/pedidos
+                requestId: 2c8d3e4f-5061-4b72-9c83-ad94e5f60718
+    PedidoEmConflito:
+      description: Unidade inativa, produto indisponivel ou estoque insuficiente
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          examples:
+            estoqueInsuficiente:
+              value:
+                error: ESTOQUE_INSUFICIENTE
+                message: Nao ha quantidade suficiente para um ou mais itens.
+                details:
+                  - field: itens[0].quantidade
+                    issue: 'Disponivel: 1'
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/pedidos
+                requestId: 3d9e4f50-6172-4c83-ad94-be05f6071829
+            produtoIndisponivel:
+              value:
+                error: PRODUTO_INDISPONIVEL
+                message: Um ou mais produtos estao indisponiveis na unidade.
+                details:
+                  - field: itens[0].produtoId
+                    issue: Produto 5 indisponivel na unidade
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/pedidos
+                requestId: 4ea05061-7283-4d94-be05-cf160718293a
+            unidadeInativa:
+              value:
+                error: UNIDADE_INATIVA
+                message: A unidade informada nao esta recebendo pedidos.
+                details:
+                  - field: unidadeId
+                    issue: Unidade 3 inativa
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/pedidos
+                requestId: 5fb16172-8394-4ea5-8f16-d02718293a4b

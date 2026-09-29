@@ -33,6 +33,11 @@ router
       .as('unidades')
 
     router
+      .post('pedidos', [controllers.Pedidos, 'store'])
+      .as('pedidos.store')
+      .use(middleware.perfil({ perfis: ['CLIENTE'] }))
+
+    router
       .group(() => {
         router.get('profile', [controllers.Profile, 'show'])
         router.post('logout', [controllers.AccessTokens, 'destroy'])
