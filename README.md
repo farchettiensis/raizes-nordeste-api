@@ -80,6 +80,7 @@ O Swagger em `/docs` traz os exemplos de request e response de cada um. Esta tab
 | GET | `/api/v1/unidades/:id` | pública | Detalhe de uma unidade |
 | GET | `/api/v1/unidades/:id/cardapio` | pública | Cardápio da unidade, com preço e disponibilidade |
 | GET | `/api/v1/unidades/:id/estoque` | token, perfis da operação | Saldo de estoque da unidade, produto a produto |
+| POST | `/api/v1/pedidos` | token, perfil CLIENTE | Cria o pedido validando cardápio e estoque da unidade |
 
 Listagens aceitam `?page=1&limit=10` e respondem `{ "data": [...], "metadata": { ... } }`.
 
@@ -101,6 +102,36 @@ O saldo de estoque fica restrito a quem opera a unidade porque o que interessa a
 
 A autorização é por perfil, não por posse do recurso: hoje um gerente consegue consultar o estoque de qualquer unidade, não só da sua. Restringir o acesso à unidade do próprio vínculo (`users.unidade_id`) é o passo seguinte, e não está implementado.
 
+## Criação de pedido
+
+`POST /api/v1/pedidos` é o começo do fluxo crítico: cria o pedido em `AGUARDANDO_PAGAMENTO`, e o pagamento simulado entra na próxima etapa.
+
+```json
+{
+  "unidadeId": 1,
+  "canalPedido": "TOTEM",
+  "itens": [{ "produtoId": 1, "quantidade": 2 }]
+}
+```
+
+- **O cliente vem do token.** O corpo não aceita `clienteId`, então ninguém cria pedido em nome de outra pessoa, e a resposta não expõe dado pessoal.
+- **O servidor calcula o preço.** Cada item copia o nome e o preço praticado na unidade naquele momento, e o total é somado em centavos inteiros, sem erro de ponto flutuante.
+- **O estoque é baixado na criação**, com uma movimentação de `SAIDA` por item, vinculada ao pedido. Baixar só na aprovação do pagamento deixaria a checagem da criação como mera sugestão: dois clientes poderiam pagar pela mesma última unidade, e o conflito apareceria depois do dinheiro, na forma de estorno. Com a baixa na criação, o 409 acontece antes de qualquer cobrança. A recusa do pagamento devolverá o saldo com uma movimentação de `ENTRADA`.
+- **Pedidos simultâneos não vendem a mesma unidade duas vezes.** Tudo roda numa transação, e os saldos dos produtos do pedido são bloqueados com `SELECT ... FOR UPDATE`, sempre na ordem do `produto_id` para evitar deadlock. Um segundo pedido pelo mesmo produto espera o primeiro terminar e enxerga o saldo já baixado. Há um teste que dispara dois pedidos ao mesmo tempo pela última unidade e exige um `201` e um `409`; sem o bloqueio, os dois são aceitos.
+
+As verificações seguem uma ordem fixa, e cada uma aponta em `details` todos os itens com problema, não só o primeiro:
+
+| Situação | Status | `error` |
+|---|---|---|
+| `canalPedido` ausente ou fora da lista, itens vazios ou repetidos | 422 | `DADOS_INVALIDOS` |
+| Unidade inexistente | 404 | `UNIDADE_NAO_ENCONTRADA` |
+| Unidade inativa | 409 | `UNIDADE_INATIVA` |
+| Produto fora do cardápio da unidade | 404 | `PRODUTO_NAO_ENCONTRADO` |
+| Produto marcado indisponível na unidade ou inativo na rede | 409 | `PRODUTO_INDISPONIVEL` |
+| Quantidade acima do saldo | 409 | `ESTOQUE_INSUFICIENTE` |
+
+Limitação conhecida: um pedido que nunca é pago segura o estoque indefinidamente. Liberar a reserva de pedidos abandonados exige expiração por tempo, com uma rotina agendada que cancele o pedido e devolva o saldo, e isso não está implementado.
+
 ## Padrão de erro
 
 Toda falha, em qualquer endpoint, responde com o mesmo corpo:
@@ -108,8 +139,8 @@ Toda falha, em qualquer endpoint, responde com o mesmo corpo:
 ```json
 {
   "error": "ESTOQUE_INSUFICIENTE",
-  "message": "Não há quantidade suficiente para um ou mais itens.",
-  "details": [{ "field": "itens[0].quantidade", "issue": "Disponível: 1" }],
+  "message": "Nao ha quantidade suficiente para um ou mais itens.",
+  "details": [{ "field": "itens[0].quantidade", "issue": "Disponivel: 1" }],
   "timestamp": "2026-02-05T12:00:00.000Z",
   "path": "/api/v1/pedidos",
   "requestId": "33be9a44-6849-439c-960c-cb2d995aa732"
@@ -146,6 +177,7 @@ app/
   exceptions/    ApiException e o handler que padroniza as falhas
   middleware/    autenticação e preparo da requisição
   models/        entidades do domínio, relações e regras próprias
+  services/      casos de uso que orquestram mais de um model
   transformers/  o que cada resposta expõe
   validators/    schemas VineJS de entrada
 config/          configuração do framework
@@ -159,7 +191,7 @@ tests/
   unit/          regras de domínio isoladas
 ```
 
-As camadas seguem a separação pedida no roteiro: o **domínio** vive em `app/models`, a **infraestrutura** em `database/` e `config/`, e a **API** em `app/controllers`, `app/validators`, `app/transformers` e `start/routes.ts`. A camada de **aplicação**, com os casos de uso que orquestram o fluxo do pedido, entra em `app/services`.
+As camadas seguem a separação pedida no roteiro: o **domínio** vive em `app/models`, a **infraestrutura** em `database/` e `config/`, e a **API** em `app/controllers`, `app/validators`, `app/transformers` e `start/routes.ts`. A camada de **aplicação**, com os casos de uso que orquestram o fluxo do pedido, vive em `app/services`.
 
 ### Schema gerado
 
