@@ -1,0 +1,241 @@
+openapi: 3.0.3
+info:
+  title: Pagamento Mock
+  version: 1.0.0
+  description: |
+    Provedor de pagamento simulado da rede Raízes do Nordeste. Roda como serviço
+    separado e faz o papel do gateway externo: recebe a solicitação, devolve o
+    pagamento como PENDENTE e informa o resultado depois, por webhook assinado.
+
+    O resultado não é decidido sozinho: `POST /simulacoes` faz o papel do cliente
+    pagando no app do banco (ou do emissor recusando). O estado vive em memória e
+    se perde ao reiniciar o processo.
+
+    Webhook: `POST` na URL configurada em `WEBHOOK_URL`, com o evento no corpo e
+    os cabeçalhos `X-Evento-Id` e `X-Assinatura: t=<unix>,v1=<hex>`, onde `v1` é o
+    HMAC-SHA256 de `<t>.<corpo>` com `WEBHOOK_SECRET`. A entrega é "ao menos uma
+    vez": falhas são retentadas com espera exponencial e cada evento é enviado
+    `WEBHOOK_DELIVERIES` vezes, então o receptor precisa ser idempotente.
+servers:
+  - url: http://localhost:4000
+paths:
+  /status:
+    get:
+      summary: Verifica se o serviço está no ar
+      responses:
+        '200':
+          description: Serviço no ar
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+  /openapi.yaml:
+    get:
+      summary: Este documento
+      responses:
+        '200':
+          description: Especificação OpenAPI
+          content:
+            application/yaml:
+              schema:
+                type: string
+  /pagamentos:
+    post:
+      summary: Solicita um pagamento
+      description: |
+        Registra o pagamento como PENDENTE. Repetir a chave de idempotência com o
+        mesmo conteúdo devolve o pagamento original com 200, sem criar outro.
+        Com `FAILURE_RATE` acima de zero, parte das chamadas responde 503 sem
+        registrar nada.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            maxLength: 255
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolicitacaoPagamento'
+      responses:
+        '201':
+          description: Pagamento criado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pagamento'
+        '200':
+          description: Repetição da mesma solicitação, devolve o pagamento original
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pagamento'
+        '400':
+          $ref: '#/components/responses/Erro'
+        '409':
+          $ref: '#/components/responses/Erro'
+        '422':
+          $ref: '#/components/responses/Erro'
+        '503':
+          $ref: '#/components/responses/Erro'
+  /pagamentos/{id}:
+    get:
+      summary: Consulta um pagamento
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Pagamento
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pagamento'
+        '404':
+          $ref: '#/components/responses/Erro'
+  /simulacoes:
+    post:
+      summary: Decide o resultado de um pagamento pendente e dispara o webhook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pagamentoId, resultado]
+              properties:
+                pagamentoId:
+                  type: string
+                  example: pag_0d4f8a8e-3b9e-4b8a-9f57-2f5d1f1f8b10
+                resultado:
+                  type: string
+                  enum: [APROVADO, RECUSADO]
+                motivo:
+                  type: string
+                  description: Motivo da recusa. Sem ele, vale o motivo padrão.
+                  example: Saldo insuficiente
+      responses:
+        '202':
+          description: Pagamento processado, webhook em entrega
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  eventoId:
+                    type: string
+                  pagamento:
+                    $ref: '#/components/schemas/Pagamento'
+        '404':
+          $ref: '#/components/responses/Erro'
+        '409':
+          $ref: '#/components/responses/Erro'
+        '422':
+          $ref: '#/components/responses/Erro'
+components:
+  schemas:
+    SolicitacaoPagamento:
+      type: object
+      required: [referencia, valor, metodo]
+      properties:
+        referencia:
+          type: string
+          maxLength: 80
+          description: Identificador do pagamento no sistema de quem chama
+        valor:
+          type: integer
+          minimum: 1
+          description: Valor em centavos
+          example: 2590
+        metodo:
+          type: string
+          enum: [PIX, CARTAO_CREDITO, CARTAO_DEBITO]
+        descricao:
+          type: string
+          maxLength: 140
+    Pagamento:
+      type: object
+      properties:
+        id:
+          type: string
+          example: pag_0d4f8a8e-3b9e-4b8a-9f57-2f5d1f1f8b10
+        referencia:
+          type: string
+        valor:
+          type: integer
+        metodo:
+          type: string
+          enum: [PIX, CARTAO_CREDITO, CARTAO_DEBITO]
+        descricao:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [PENDENTE, APROVADO, RECUSADO]
+        motivoRecusa:
+          type: string
+          nullable: true
+        pix:
+          type: object
+          nullable: true
+          properties:
+            copiaECola:
+              type: string
+              example: PIX-MOCK-3F9A0C1B2D4E5F6A7B8C9D0E
+        criadoEm:
+          type: string
+          format: date-time
+        processadoEm:
+          type: string
+          format: date-time
+          nullable: true
+    EventoDePagamento:
+      type: object
+      description: Corpo do webhook enviado para `WEBHOOK_URL`
+      properties:
+        id:
+          type: string
+          example: evt_6b1f0c4e-8d2a-4f3b-9c5d-1e2f3a4b5c6d
+        tipo:
+          type: string
+          enum: [pagamento.aprovado, pagamento.recusado]
+        criadoEm:
+          type: string
+          format: date-time
+        pagamento:
+          $ref: '#/components/schemas/Pagamento'
+  responses:
+    Erro:
+      description: Erro no formato do provedor
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              erro:
+                type: object
+                properties:
+                  codigo:
+                    type: string
+                    example: REQUISICAO_INVALIDA
+                  mensagem:
+                    type: string
+                  detalhes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        campo:
+                          type: string
+                        problema:
+                          type: string
