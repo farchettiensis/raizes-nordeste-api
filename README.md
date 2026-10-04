@@ -25,7 +25,9 @@ docker compose up --build
 | Pagamento mock | http://localhost:4000/openapi.yaml |
 | PostgreSQL | `127.0.0.1:5433`, usuário e senha `postgres` |
 
-As variáveis do `docker-compose.yml` são de demonstração local, inclusive o `APP_KEY` e o segredo do webhook. Para desenvolver, o caminho abaixo, com a API rodando direto no host, dá recarga automática.
+As variáveis do `docker-compose.yml` são de demonstração local, inclusive o `APP_KEY` e o segredo do webhook. Para desenvolver com recarga automática, rode as aplicações direto no host, como descrito abaixo.
+
+A API e o pagamento mock são processos separados, cada um no seu container, e só conversam por HTTP: a API chama `http://pagamento-mock:4000` e o mock devolve o resultado em `http://api:3333/api/v1/pagamentos/webhook`. O código entra na imagem no build, então depois de mudar o código é preciso o `--build`; sem ele, o `docker compose up` reaproveita as imagens já construídas.
 
 ## Requisitos para rodar no host
 
@@ -35,7 +37,7 @@ As variáveis do `docker-compose.yml` são de demonstração local, inclusive o 
 
 ## Como executar
 
-A API vive em `api/`. Todos os comandos abaixo rodam a partir dessa pasta.
+A API vive em `api/`, e os comandos a seguir rodam a partir dessa pasta, exceto onde indicado.
 
 ```bash
 cd api
@@ -54,6 +56,8 @@ Abra o `.env` e ajuste as variáveis de banco para o seu PostgreSQL. Os valores 
 | `DB_USER` | Usuário do banco | `postgres` |
 | `DB_PASSWORD` | Senha do banco | vazio |
 | `DB_DATABASE` | Nome do banco | `raizes_nordeste` |
+| `PAGAMENTO_GATEWAY_URL` | Endereço do pagamento mock | `http://localhost:4000` |
+| `PAGAMENTO_WEBHOOK_SECRET` | Segredo da assinatura do webhook, o mesmo do mock | `troque-este-segredo` |
 
 Crie os bancos de desenvolvimento e de testes:
 
@@ -70,7 +74,37 @@ node ace db:seed
 npm run dev
 ```
 
-A API sobe na URL impressa na inicialização, em geral `http://localhost:3333`. Se a porta do `.env` estiver ocupada, o Adonis escolhe outra, então use sempre a URL do console.
+A API sobe na URL impressa na inicialização, em geral `http://localhost:3333`. Se a porta do `.env` estiver ocupada, o Adonis escolhe outra, então use sempre a URL do console. Nesse caso, ajuste também o `WEBHOOK_URL` do mock, ou o resultado do pagamento não chega.
+
+### Pagamento mock no host
+
+O pagamento só se completa com o mock no ar. Em outro terminal, a partir da raiz do repositório:
+
+```bash
+cd pagamento-mock
+npm install
+cp .env.example .env
+npm run dev
+```
+
+Os padrões dos dois `.env.example` já combinam: a API chama o mock em `localhost:4000`, o mock entrega o webhook em `localhost:3333` e os dois usam o mesmo segredo. Se mudar o segredo de um lado, mude do outro, ou o webhook responde `401 ASSINATURA_INVALIDA`.
+
+### Mock no Docker, API no host
+
+Também dá para subir só o mock em container e manter a API no host. Duas coisas mudam em relação ao Compose completo:
+
+- dentro do container, `api:3333` não existe e `localhost` é o próprio container, então o webhook precisa apontar para `host.docker.internal`, e o segredo precisa ser o mesmo do `api/.env`;
+- a API precisa escutar em todas as interfaces (`HOST=0.0.0.0`), porque o `HOST=localhost` do `.env` só aceita conexões do próprio host, e o container chega por outra interface.
+
+```bash
+PAGAMENTO_WEBHOOK_URL=http://host.docker.internal:3333/api/v1/pagamentos/webhook \
+PAGAMENTO_WEBHOOK_SECRET=troque-este-segredo \
+docker compose up pagamento-mock
+
+cd api && HOST=0.0.0.0 npm run dev
+```
+
+### Dados de demonstração
 
 O seeder cria quatro unidades (uma delas inativa, de propósito), oito produtos, o cardápio e o estoque de cada unidade, e um usuário para cada perfil. Rodá-lo mais de uma vez não duplica nada. Todas as contas usam a senha `Senha@123`:
 
@@ -86,7 +120,7 @@ O seeder cria quatro unidades (uma delas inativa, de propósito), oito produtos,
 
 Com o servidor rodando, abra `/docs` na URL impressa na inicialização. A raiz `/` redireciona para lá.
 
-O contrato fica em [`openapi.yaml`](openapi.yaml), na raiz do projeto, e é servido em `/docs/openapi.yaml`. O Swagger UI é servido a partir do pacote instalado localmente, sem depender de CDN, então a documentação funciona offline.
+O contrato fica em [`api/openapi.yaml`](api/openapi.yaml) e é servido em `/docs/openapi.yaml`. O Swagger UI é servido a partir do pacote instalado localmente, sem depender de CDN, então a documentação funciona offline.
 
 O documento é escrito à mão, e não gerado por biblioteca. Em troca disso, um teste automatizado compara os caminhos declarados no `openapi.yaml` com as rotas realmente registradas no router e falha se as duas listas divergirem, de modo que o contrato não envelhece em silêncio.
 
