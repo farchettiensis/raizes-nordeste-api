@@ -25,6 +25,7 @@ export default defineConfig({
     () => import('@adonisjs/cors/cors_provider'),
     () => import('@adonisjs/auth/auth_provider'),
     () => import('#providers/api_provider'),
+    () => import('#providers/pagamento_provider'),
   ],
 
   preloads: [

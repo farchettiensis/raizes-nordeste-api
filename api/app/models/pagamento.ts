@@ -11,6 +11,14 @@ export const METODOS_PAGAMENTO = ['PIX', 'CARTAO_CREDITO', 'CARTAO_DEBITO', 'DIN
 
 export type MetodoPagamento = (typeof METODOS_PAGAMENTO)[number]
 
+export const METODOS_PAGAMENTO_EXTERNO = [
+  'PIX',
+  'CARTAO_CREDITO',
+  'CARTAO_DEBITO',
+] as const satisfies readonly MetodoPagamento[]
+
+export type MetodoPagamentoExterno = (typeof METODOS_PAGAMENTO_EXTERNO)[number]
+
 export default class Pagamento extends PagamentoSchema {
   static table = 'pagamentos'
 

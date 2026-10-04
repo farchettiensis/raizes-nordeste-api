@@ -49,6 +49,8 @@ services:
       DB_USER: postgres
       DB_PASSWORD: postgres
       DB_DATABASE: raizes_nordeste
+      PAGAMENTO_GATEWAY_URL: http://pagamento-mock:4000
+      PAGAMENTO_WEBHOOK_SECRET: ${PAGAMENTO_WEBHOOK_SECRET:-segredo-local-de-demonstracao}
     ports:
       - '3333:3333'
     depends_on:
