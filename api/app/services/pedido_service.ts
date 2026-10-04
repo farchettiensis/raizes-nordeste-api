@@ -128,14 +128,11 @@ export default class PedidoService {
     itens: ItemSolicitado[],
     trx: TransactionClientContract
   ) {
-    const estoques = await Estoque.query({ client: trx })
-      .where('unidadeId', unidade.id)
-      .whereIn(
-        'produtoId',
-        itens.map((item) => item.produtoId)
-      )
-      .orderBy('produtoId')
-      .forUpdate()
+    const estoques = await Estoque.travarDaUnidade(
+      unidade.id,
+      itens.map((item) => item.produtoId),
+      trx
+    )
 
     const porProduto = new Map(estoques.map((estoque) => [estoque.produtoId, estoque]))
 
