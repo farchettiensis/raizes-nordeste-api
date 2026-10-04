@@ -12,7 +12,10 @@ Projeto Multidisciplinar 2026, trilha Back-End (UNINTER).
 
 ## Como executar
 
+A API vive em `api/`. Todos os comandos abaixo rodam a partir dessa pasta.
+
 ```bash
+cd api
 npm install
 cp .env.example .env
 ```
@@ -151,6 +154,8 @@ O campo `error` é um identificador estável, pensado para o cliente tratar prog
 
 ## Comandos
 
+A partir de `api/`:
+
 ```bash
 npm run dev         # servidor de desenvolvimento com recarga automática
 npm start           # servidor de produção, a partir do build
@@ -170,6 +175,8 @@ node ace codegen            # regenera os tipos de rotas e controllers
 Os testes usam o banco `raizes_nordeste_test`, definido em `.env.test`. As migrations rodam e são revertidas automaticamente a cada execução, e cada teste começa com as tabelas limpas.
 
 ## Organização do projeto
+
+Dentro de `api/`:
 
 ```
 app/
