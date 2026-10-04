@@ -6,6 +6,12 @@ O resultado não é sorteado. `POST /simulacoes` faz o papel do cliente pagando 
 
 A especificação completa está em [`openapi.yaml`](openapi.yaml), servida também em `GET /openapi.yaml`.
 
+## Stack
+
+Fastify 5 com TypeScript, rodando direto no Node.js 24 (sem etapa de build), testes com `node:test` e o mesmo ESLint e Prettier da API.
+
+O mock não usa AdonisJS de propósito. São quatro rotas com estado em memória: um segundo app Adonis traria codegen, providers e ORM sem nada para persistir. Fastify entrega o que o serviço precisa com uma única dependência de execução: validação por JSON Schema na rota e `inject()` para testar sem abrir porta. Usar outra stack também reforça o que o mock representa, um sistema externo à rede, que a API só conhece pelo contrato HTTP.
+
 ## Como executar
 
 Requer Node.js 24 ou superior, que roda TypeScript direto, sem etapa de build.

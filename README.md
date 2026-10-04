@@ -9,7 +9,7 @@ Projeto Multidisciplinar 2026, trilha Back-End (UNINTER).
 | Pasta | O que é |
 |---|---|
 | `api/` | A API REST, em AdonisJS |
-| `pagamento-mock/` | Provedor de pagamento simulado, serviço separado (veja o [README dele](pagamento-mock/README.md)) |
+| `pagamento-mock/` | Provedor de pagamento simulado, serviço separado em Fastify (veja o [README dele](pagamento-mock/README.md), que explica a escolha) |
 
 ## Execução com Docker
 
