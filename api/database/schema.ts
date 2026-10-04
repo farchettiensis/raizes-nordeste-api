@@ -149,7 +149,7 @@ export class MovimentacoesEstoqueSchema extends BaseModel {
 }
 
 export class PagamentoSchema extends BaseModel {
-  static $columns = ['createdAt', 'id', 'metodo', 'motivoRecusa', 'payloadRequisicao', 'payloadResposta', 'pedidoId', 'processadoEm', 'referenciaExterna', 'status', 'updatedAt', 'valor'] as const
+  static $columns = ['createdAt', 'id', 'metodo', 'motivoRecusa', 'payloadRequisicao', 'payloadResposta', 'payloadWebhook', 'pedidoId', 'processadoEm', 'referenciaExterna', 'status', 'updatedAt', 'valor'] as const
   $columns = PagamentoSchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
@@ -163,6 +163,8 @@ export class PagamentoSchema extends BaseModel {
   declare payloadRequisicao: any | null
   @column()
   declare payloadResposta: any | null
+  @column()
+  declare payloadWebhook: any | null
   @column()
   declare pedidoId: number
   @column.dateTime()

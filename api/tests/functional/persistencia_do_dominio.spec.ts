@@ -203,4 +203,18 @@ test.group('Persistencia do dominio', (group) => {
       /pedidos_codigo_unique/
     )
   })
+
+  test('um pedido tem no maximo um pagamento', async ({ assert }) => {
+    const unidade = await criarUnidade()
+    const pedido = await Pedido.create({
+      codigo: 'PD0002',
+      unidadeId: unidade.id,
+      canalPedido: 'APP',
+    })
+    const pagamento = { pedidoId: pedido.id, metodo: 'PIX' as const, valor: '10.00' }
+
+    await Pagamento.create(pagamento)
+
+    await assert.rejects(() => Pagamento.create(pagamento), /pagamentos_pedido_id_unique/)
+  })
 })
