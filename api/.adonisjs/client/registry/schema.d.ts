@@ -139,6 +139,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/pagamentos_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'pagamentos.webhook': {
+    methods: ["POST"]
+    pattern: '/api/v1/pagamentos/webhook'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/pagamento').eventoDePagamentoValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/pagamento').eventoDePagamentoValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/pagamento_webhooks_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/pagamento_webhooks_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'profile.profile.show': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/account/profile'

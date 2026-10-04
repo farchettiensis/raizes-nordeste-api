@@ -33,6 +33,9 @@ export interface ApiDefinition {
       store: typeof routes['pedidos.pagamento.store']
     }
   }
+  pagamentos: {
+    webhook: typeof routes['pagamentos.webhook']
+  }
   profile: {
     profile: {
       show: typeof routes['profile.profile.show']

@@ -72,6 +72,12 @@ const routes = {
     tokens: [{"old":"/api/v1/pedidos/:id/pagamento","type":0,"val":"api","end":""},{"old":"/api/v1/pedidos/:id/pagamento","type":0,"val":"v1","end":""},{"old":"/api/v1/pedidos/:id/pagamento","type":0,"val":"pedidos","end":""},{"old":"/api/v1/pedidos/:id/pagamento","type":1,"val":"id","end":""},{"old":"/api/v1/pedidos/:id/pagamento","type":0,"val":"pagamento","end":""}],
     types: placeholder as Registry['pedidos.pagamento.store']['types'],
   },
+  'pagamentos.webhook': {
+    methods: ["POST"],
+    pattern: '/api/v1/pagamentos/webhook',
+    tokens: [{"old":"/api/v1/pagamentos/webhook","type":0,"val":"api","end":""},{"old":"/api/v1/pagamentos/webhook","type":0,"val":"v1","end":""},{"old":"/api/v1/pagamentos/webhook","type":0,"val":"pagamentos","end":""},{"old":"/api/v1/pagamentos/webhook","type":0,"val":"webhook","end":""}],
+    types: placeholder as Registry['pagamentos.webhook']['types'],
+  },
   'profile.profile.show': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/account/profile',

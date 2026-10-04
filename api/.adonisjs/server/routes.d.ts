@@ -15,6 +15,7 @@ export type ScannedRoutes = {
     'unidades.estoques.index': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pedidos.store': { paramsTuple?: []; params?: {} }
     'pedidos.pagamento.store': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'pagamentos.webhook': { paramsTuple?: []; params?: {} }
     'profile.profile.show': { paramsTuple?: []; params?: {} }
     'profile.access_tokens.destroy': { paramsTuple?: []; params?: {} }
   }
@@ -43,6 +44,7 @@ export type ScannedRoutes = {
     'auth.access_tokens.store': { paramsTuple?: []; params?: {} }
     'pedidos.store': { paramsTuple?: []; params?: {} }
     'pedidos.pagamento.store': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'pagamentos.webhook': { paramsTuple?: []; params?: {} }
     'profile.access_tokens.destroy': { paramsTuple?: []; params?: {} }
   }
 }

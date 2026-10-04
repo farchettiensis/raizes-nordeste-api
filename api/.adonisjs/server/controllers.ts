@@ -9,6 +9,7 @@ export const controllers = {
   Docs: () => import('#controllers/docs_controller'),
   Estoques: () => import('#controllers/estoques_controller'),
   NewAccount: () => import('#controllers/new_account_controller'),
+  PagamentoWebhooks: () => import('#controllers/pagamento_webhooks_controller'),
   Pagamentos: () => import('#controllers/pagamentos_controller'),
   Pedidos: () => import('#controllers/pedidos_controller'),
   Profile: () => import('#controllers/profile_controller'),

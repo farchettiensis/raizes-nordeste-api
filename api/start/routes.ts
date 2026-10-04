@@ -45,6 +45,11 @@ router
       .use(middleware.perfil({ perfis: ['CLIENTE'] }))
 
     router
+      .post('pagamentos/webhook', [controllers.PagamentoWebhooks, 'store'])
+      .as('pagamentos.webhook')
+      .use(middleware.assinaturaPagamento())
+
+    router
       .group(() => {
         router.get('profile', [controllers.Profile, 'show'])
         router.post('logout', [controllers.AccessTokens, 'destroy'])

@@ -374,6 +374,58 @@ paths:
         '503':
           $ref: '#/components/responses/GatewayPagamentoIndisponivel'
 
+  /api/v1/pagamentos/webhook:
+    post:
+      tags: [Pagamentos]
+      summary: Recebe do provedor o resultado de um pagamento
+      description: |
+        Chamado pelo provedor de pagamento, nao pelo cliente. Nao usa token: a
+        autenticidade vem do cabecalho X-Assinatura, um HMAC-SHA256 de
+        `<t>.<corpo bruto>` com o segredo compartilhado
+        (PAGAMENTO_WEBHOOK_SECRET). Assinaturas com mais de 5 minutos sao
+        recusadas, o que impede reaproveitar uma entrega capturada.
+
+        APROVADO leva o pedido a PAGO. RECUSADO leva o pedido a CANCELADO,
+        guarda o motivo no pagamento e devolve o estoque, com uma movimentacao
+        de ENTRADA por item vinculada ao pedido, tudo na mesma transacao.
+
+        O provedor entrega cada evento ao menos uma vez, entao o processamento
+        e idempotente: o pedido e o pagamento ficam bloqueados durante a
+        transacao e um resultado para pagamento que ja nao esta PENDENTE e
+        ignorado com 204, sem devolver o estoque de novo.
+      security: []
+      parameters:
+        - name: X-Assinatura
+          in: header
+          required: true
+          description: '`t=<unix>,v1=<hmac em hexadecimal>`'
+          schema:
+            type: string
+            example: t=1791140234,v1=88cf2b0e4d5a6f7c8b9a0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a
+        - name: X-Evento-Id
+          in: header
+          required: false
+          description: Identificador do evento, igual em todas as entregas dele
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventoDePagamento'
+      responses:
+        '204':
+          description: Resultado processado, ou entrega repetida ignorada
+        '401':
+          $ref: '#/components/responses/AssinaturaInvalida'
+        '404':
+          $ref: '#/components/responses/PagamentoNaoEncontrado'
+        '409':
+          $ref: '#/components/responses/ResultadoDePagamentoEmConflito'
+        '422':
+          $ref: '#/components/responses/DadosInvalidos'
+
 components:
   parameters:
     Page:
@@ -718,6 +770,43 @@ components:
           type: string
           format: date-time
           example: '2026-02-05T12:00:00.000Z'
+
+    EventoDePagamento:
+      type: object
+      required: [id, tipo, pagamento]
+      properties:
+        id:
+          type: string
+          example: evt_6b1f0c4e-8d2a-4f3b-9c5d-1e2f3a4b5c6d
+        tipo:
+          type: string
+          enum: [pagamento.aprovado, pagamento.recusado]
+        pagamento:
+          type: object
+          required: [id, referencia, valor, status, motivoRecusa, processadoEm]
+          properties:
+            id:
+              type: string
+              description: Identificador do pagamento no provedor
+              example: pag_0d4f8a8e-3b9e-4b8a-9f57-2f5d1f1f8b10
+            referencia:
+              type: string
+              description: pagamentoId nesta API, enviado na solicitacao
+              example: '17'
+            valor:
+              type: integer
+              description: Valor em centavos, conferido com o pagamento registrado
+              example: 6015
+            status:
+              type: string
+              enum: [APROVADO, RECUSADO]
+            motivoRecusa:
+              type: string
+              nullable: true
+              example: Pagamento recusado pelo emissor (simulado)
+            processadoEm:
+              type: string
+              format: date-time
 
     DetalheErro:
       type: object
@@ -1068,3 +1157,61 @@ components:
             timestamp: '2026-02-05T12:00:00.000Z'
             path: /api/v1/pedidos/9001/pagamento
             requestId: c06b7c8d-9eaf-4b01-82c3-e4f5a6b7c8d9
+
+    AssinaturaInvalida:
+      description: Cabecalho X-Assinatura ausente, invalido ou expirado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          example:
+            error: ASSINATURA_INVALIDA
+            message: Assinatura do webhook ausente, invalida ou expirada.
+            details: []
+            timestamp: '2026-02-05T12:00:00.000Z'
+            path: /api/v1/pagamentos/webhook
+            requestId: d17c8d9e-af0b-4c12-93d4-f5a6b7c8d9e0
+
+    PagamentoNaoEncontrado:
+      description: A referencia enviada pelo provedor nao corresponde a nenhum pagamento
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          example:
+            error: PAGAMENTO_NAO_ENCONTRADO
+            message: O pagamento informado pelo provedor nao existe.
+            details:
+              - field: pagamento.referencia
+                issue: Pagamento 999 nao encontrado
+            timestamp: '2026-02-05T12:00:00.000Z'
+            path: /api/v1/pagamentos/webhook
+            requestId: e28d9eaf-b01c-4d23-a4e5-a6b7c8d9e0f1
+
+    ResultadoDePagamentoEmConflito:
+      description: Resultado divergente do pagamento registrado, ou pedido que nao aceita a transicao
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          examples:
+            divergente:
+              value:
+                error: PAGAMENTO_DIVERGENTE
+                message: O resultado nao corresponde ao pagamento registrado.
+                details:
+                  - field: pagamento.valor
+                    issue: 'Esperado: 6015'
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/pagamentos/webhook
+                requestId: f39eafb0-c12d-4e34-b5f6-b7c8d9e0f1a2
+            transicaoInvalida:
+              value:
+                error: TRANSICAO_DE_STATUS_INVALIDA
+                message: O pedido nao pode receber este resultado de pagamento.
+                details:
+                  - field: status
+                    issue: CANCELADO para PAGO
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/pagamentos/webhook
+                requestId: 04afb0c1-d23e-4f45-86a7-c8d9e0f1a2b3

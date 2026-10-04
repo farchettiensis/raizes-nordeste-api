@@ -20,4 +20,5 @@ router.use([
 export const middleware = router.named({
   auth: () => import('#middleware/auth_middleware'),
   perfil: () => import('#middleware/perfil_middleware'),
+  assinaturaPagamento: () => import('#middleware/assinatura_pagamento_middleware'),
 })

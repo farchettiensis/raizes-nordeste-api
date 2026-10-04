@@ -1,14 +1,22 @@
 import { setTimeout as esperar } from 'node:timers/promises'
+import type { ApiClient } from '@japa/api-client'
 import { test } from '@japa/runner'
 import app from '@adonisjs/core/services/app'
 import testUtils from '@adonisjs/core/services/test_utils'
 import db from '@adonisjs/lucid/services/db'
 
+import pagamentoConfig from '#config/pagamento'
+import Estoque from '#models/estoque'
+import MovimentacaoEstoque from '#models/movimentacao_estoque'
 import Pagamento from '#models/pagamento'
 import Pedido from '#models/pedido'
+import type Produto from '#models/produto'
 import type Unidade from '#models/unidade'
 import type User from '#models/user'
+import { assinar } from '#services/assinatura_webhook'
+import { emCentavos } from '#services/centavos'
 import { GatewayPagamento } from '#services/gateway_pagamento'
+import PagamentoService from '#services/pagamento_service'
 import PedidoService from '#services/pedido_service'
 import GatewayFalso from '#tests/helpers/gateway_falso'
 import {
@@ -61,6 +69,28 @@ async function pedidoDe(cliente: User, unidade?: Unidade): Promise<Pedido> {
   })
 }
 
+async function comPedidoTravado<T>(
+  pedido: Pedido,
+  disparar: () => Promise<T>,
+  enquantoTravado: () => Promise<void>
+) {
+  const trava = await db.transaction()
+
+  try {
+    await Pedido.query({ client: trava }).where('id', pedido.id).forUpdate().firstOrFail()
+    const emAndamento = disparar()
+    await esperar(300)
+    await enquantoTravado()
+    await trava.commit()
+
+    return await emAndamento
+  } finally {
+    if (!trava.isCompleted) {
+      await trava.rollback()
+    }
+  }
+}
+
 const gateway = new GatewayFalso()
 
 test.group('Solicitacao de pagamento', (group) => {
@@ -70,9 +100,10 @@ test.group('Solicitacao de pagamento', (group) => {
     return () => app.container.restore(GatewayPagamento)
   })
 
-  group.each.setup(async () => {
+  group.each.setup(() => {
     gateway.reiniciar()
-    await testUtils.db().truncate()
+
+    return testUtils.db().truncate()
   })
 
   test('sem token responde 401', async ({ client, assert }) => {
@@ -243,15 +274,11 @@ test.group('Solicitacao de pagamento', (group) => {
     const pagar = () =>
       client.post(`/api/v1/pedidos/${pedido.id}/pagamento`).json({ metodo: 'PIX' }).loginAs(cliente)
 
-    const trava = await db.transaction()
-    await Pedido.query({ client: trava }).where('id', pedido.id).forUpdate().firstOrFail()
-
-    const emAndamento = Promise.all([pagar(), pagar()])
-    await esperar(300)
-    assert.lengthOf(await Pagamento.query().where('pedidoId', pedido.id), 0)
-
-    await trava.commit()
-    const respostas = await emAndamento
+    const respostas = await comPedidoTravado(
+      pedido,
+      () => Promise.all([pagar(), pagar()]),
+      async () => assert.lengthOf(await Pagamento.query().where('pedidoId', pedido.id), 0)
+    )
 
     respostas.forEach((response) => response.assertStatus(202))
     const pagamentos = await Pagamento.query().where('pedidoId', pedido.id)
@@ -334,4 +361,333 @@ test.group('Solicitacao de pagamento', (group) => {
       assert.lengthOf(gateway.chamadas, 0)
     })
   }
+})
+
+type ResultadoDoProvedor = 'APROVADO' | 'RECUSADO'
+
+const SEGREDO = pagamentoConfig.webhook.segredo.release()
+const MOTIVO = 'Saldo insuficiente'
+
+function agoraEmSegundos() {
+  return Math.floor(Date.now() / 1000)
+}
+
+function eventoPara(
+  pagamento: Pagamento,
+  status: ResultadoDoProvedor,
+  sobrescritas: Record<string, unknown> = {}
+) {
+  return {
+    id: `evt_${pagamento.id}_${status}`,
+    tipo: status === 'APROVADO' ? 'pagamento.aprovado' : 'pagamento.recusado',
+    criadoEm: '2026-10-04T12:00:00.000Z',
+    pagamento: {
+      id: pagamento.referenciaExterna,
+      referencia: String(pagamento.id),
+      valor: emCentavos(pagamento.valor),
+      metodo: pagamento.metodo,
+      status,
+      motivoRecusa: status === 'RECUSADO' ? MOTIVO : null,
+      processadoEm: '2026-10-04T12:00:00.000Z',
+      ...sobrescritas,
+    },
+  }
+}
+
+function enviarWebhook(
+  client: ApiClient,
+  evento: object,
+  { segredo = SEGREDO, timestamp = agoraEmSegundos() } = {}
+) {
+  const corpo = JSON.stringify(evento)
+
+  return client
+    .post('/api/v1/pagamentos/webhook')
+    .header('x-assinatura', `t=${timestamp},v1=${assinar(segredo, timestamp, corpo)}`)
+    .unsafeJson(corpo)
+}
+
+async function pedidoComDoisItens(cliente: User) {
+  const unidade = await criarUnidade()
+  const [tapioca, cuscuz] = [await criarProduto(), await criarProduto()]
+  await criarCardapio(unidade, tapioca, '18.90')
+  await criarCardapio(unidade, cuscuz, '22.35')
+  await criarEstoque(unidade, tapioca, 10)
+  await criarEstoque(unidade, cuscuz, 5)
+
+  const pedido = await new PedidoService().criar(cliente, {
+    unidadeId: unidade.id,
+    canalPedido: 'TOTEM',
+    itens: [
+      { produtoId: tapioca.id, quantidade: 3 },
+      { produtoId: cuscuz.id, quantidade: 2 },
+    ],
+  })
+
+  return { pedido, unidade, tapioca, cuscuz }
+}
+
+async function saldoDe(unidade: Unidade, produto: Produto) {
+  const estoque = await Estoque.query()
+    .where('unidadeId', unidade.id)
+    .where('produtoId', produto.id)
+    .firstOrFail()
+
+  return estoque.quantidade
+}
+
+async function pagamentoPendente(cliente: User, pedido: Pedido) {
+  return new PagamentoService(gateway).solicitar(cliente, pedido.id, 'PIX')
+}
+
+test.group('Webhook de pagamento', (group) => {
+  group.each.setup(() => {
+    gateway.reiniciar()
+
+    return testUtils.db().truncate()
+  })
+
+  test('sem assinatura responde 401', async ({ client, assert }) => {
+    const response = await client.post('/api/v1/pagamentos/webhook').json({} as never)
+
+    response.assertStatus(401)
+    assert.equal(errorBody(response).error, 'ASSINATURA_INVALIDA')
+  })
+
+  test('assinatura com outro segredo responde 401 e nao muda nada', async ({ client, assert }) => {
+    const cliente = await criarUsuario('CLIENTE')
+    const pedido = await pedidoDe(cliente)
+    const pagamento = await pagamentoPendente(cliente, pedido)
+
+    const response = await enviarWebhook(client, eventoPara(pagamento, 'APROVADO'), {
+      segredo: 'outro-segredo',
+    })
+
+    response.assertStatus(401)
+    await pedido.refresh()
+    assert.equal(pedido.status, 'AGUARDANDO_PAGAMENTO')
+  })
+
+  test('assinatura expirada responde 401', async ({ client, assert }) => {
+    const cliente = await criarUsuario('CLIENTE')
+    const pagamento = await pagamentoPendente(cliente, await pedidoDe(cliente))
+
+    const response = await enviarWebhook(client, eventoPara(pagamento, 'APROVADO'), {
+      timestamp: agoraEmSegundos() - 301,
+    })
+
+    response.assertStatus(401)
+    assert.equal(errorBody(response).error, 'ASSINATURA_INVALIDA')
+  })
+
+  test('corpo alterado depois de assinado responde 401', async ({ client }) => {
+    const cliente = await criarUsuario('CLIENTE')
+    const pagamento = await pagamentoPendente(cliente, await pedidoDe(cliente))
+    const timestamp = agoraEmSegundos()
+    const assinado = JSON.stringify(eventoPara(pagamento, 'RECUSADO'))
+    const adulterado = JSON.stringify(eventoPara(pagamento, 'APROVADO'))
+
+    const response = await client
+      .post('/api/v1/pagamentos/webhook')
+      .header('x-assinatura', `t=${timestamp},v1=${assinar(SEGREDO, timestamp, assinado)}`)
+      .unsafeJson(adulterado)
+
+    response.assertStatus(401)
+  })
+
+  test('evento fora do contrato responde 422', async ({ client, assert }) => {
+    const response = await enviarWebhook(client, { id: 'evt_1', tipo: 'pagamento.talvez' })
+
+    response.assertStatus(422)
+    assert.includeMembers(
+      errorBody(response).details.map((detalhe) => detalhe.field),
+      ['tipo', 'pagamento']
+    )
+  })
+
+  test('referencia desconhecida responde 404', async ({ client, assert }) => {
+    const cliente = await criarUsuario('CLIENTE')
+    const pagamento = await pagamentoPendente(cliente, await pedidoDe(cliente))
+
+    const response = await enviarWebhook(
+      client,
+      eventoPara(pagamento, 'APROVADO', { referencia: '999999' })
+    )
+
+    response.assertStatus(404)
+    assert.equal(errorBody(response).error, 'PAGAMENTO_NAO_ENCONTRADO')
+  })
+
+  test('aprovado leva o pedido a PAGO e registra o retorno', async ({ client, assert }) => {
+    const cliente = await criarUsuario('CLIENTE')
+    const pedido = await pedidoDe(cliente)
+    const pagamento = await pagamentoPendente(cliente, pedido)
+    const evento = eventoPara(pagamento, 'APROVADO')
+
+    const response = await enviarWebhook(client, evento)
+
+    response.assertStatus(204)
+    await pedido.refresh()
+    await pagamento.refresh()
+    assert.equal(pedido.status, 'PAGO')
+    assert.isNull(pedido.canceladoEm)
+    assert.equal(pagamento.status, 'APROVADO')
+    assert.isNull(pagamento.motivoRecusa)
+    assert.equal(pagamento.processadoEm?.toUTC().toISO(), '2026-10-04T12:00:00.000Z')
+    assert.deepEqual(pagamento.payloadWebhook, evento)
+    assert.lengthOf(await MovimentacaoEstoque.query().where('tipo', 'ENTRADA'), 0)
+  })
+
+  test('recusado cancela o pedido e devolve o estoque com uma entrada por item', async ({
+    client,
+    assert,
+  }) => {
+    const cliente = await criarUsuario('CLIENTE')
+    const { pedido, unidade, tapioca, cuscuz } = await pedidoComDoisItens(cliente)
+    const pagamento = await pagamentoPendente(cliente, pedido)
+    assert.equal(await saldoDe(unidade, tapioca), 7)
+    assert.equal(await saldoDe(unidade, cuscuz), 3)
+
+    const response = await enviarWebhook(client, eventoPara(pagamento, 'RECUSADO'))
+
+    response.assertStatus(204)
+    await pedido.refresh()
+    await pagamento.refresh()
+    assert.equal(pedido.status, 'CANCELADO')
+    assert.isNotNull(pedido.canceladoEm)
+    assert.equal(pagamento.status, 'RECUSADO')
+    assert.equal(pagamento.motivoRecusa, MOTIVO)
+
+    assert.equal(await saldoDe(unidade, tapioca), 10)
+    assert.equal(await saldoDe(unidade, cuscuz), 5)
+    const entradas = await MovimentacaoEstoque.query()
+      .where('tipo', 'ENTRADA')
+      .preload('estoque')
+      .orderBy('id')
+    assert.deepEqual(
+      entradas.map((entrada) => ({
+        produtoId: entrada.estoque.produtoId,
+        pedidoId: entrada.pedidoId,
+        quantidade: entrada.quantidade,
+        saldoResultante: entrada.saldoResultante,
+      })),
+      [
+        { produtoId: tapioca.id, pedidoId: pedido.id, quantidade: 3, saldoResultante: 10 },
+        { produtoId: cuscuz.id, pedidoId: pedido.id, quantidade: 2, saldoResultante: 5 },
+      ].sort((a, b) => a.produtoId - b.produtoId)
+    )
+  })
+
+  test('entrega repetida e ignorada e nao devolve o estoque duas vezes', async ({
+    client,
+    assert,
+  }) => {
+    const cliente = await criarUsuario('CLIENTE')
+    const { pedido, unidade, tapioca } = await pedidoComDoisItens(cliente)
+    const pagamento = await pagamentoPendente(cliente, pedido)
+    const evento = eventoPara(pagamento, 'RECUSADO')
+
+    const primeira = await enviarWebhook(client, evento)
+    const repetida = await enviarWebhook(client, evento)
+
+    primeira.assertStatus(204)
+    repetida.assertStatus(204)
+    assert.equal(await saldoDe(unidade, tapioca), 10)
+    assert.lengthOf(await MovimentacaoEstoque.query().where('tipo', 'ENTRADA'), 2)
+  })
+
+  test('resultado contrario depois do primeiro e ignorado', async ({ client, assert }) => {
+    const cliente = await criarUsuario('CLIENTE')
+    const pedido = await pedidoDe(cliente)
+    const pagamento = await pagamentoPendente(cliente, pedido)
+
+    await enviarWebhook(client, eventoPara(pagamento, 'RECUSADO'))
+    const response = await enviarWebhook(client, eventoPara(pagamento, 'APROVADO'))
+
+    response.assertStatus(204)
+    await pedido.refresh()
+    await pagamento.refresh()
+    assert.equal(pedido.status, 'CANCELADO')
+    assert.equal(pagamento.status, 'RECUSADO')
+  })
+
+  test('valor ou identificador divergentes respondem 409 sem mudar nada', async ({
+    client,
+    assert,
+  }) => {
+    const cliente = await criarUsuario('CLIENTE')
+    const pedido = await pedidoDe(cliente)
+    const pagamento = await pagamentoPendente(cliente, pedido)
+
+    const response = await enviarWebhook(
+      client,
+      eventoPara(pagamento, 'APROVADO', { valor: 1, id: 'pag_de_outro' })
+    )
+
+    response.assertStatus(409)
+    assert.equal(errorBody(response).error, 'PAGAMENTO_DIVERGENTE')
+    assert.sameMembers(
+      errorBody(response).details.map((detalhe) => detalhe.field),
+      ['pagamento.valor', 'pagamento.id']
+    )
+    await pedido.refresh()
+    assert.equal(pedido.status, 'AGUARDANDO_PAGAMENTO')
+  })
+
+  test('o resultado pode chegar antes de a referencia externa ser gravada', async ({
+    client,
+    assert,
+  }) => {
+    const cliente = await criarUsuario('CLIENTE')
+    const pedido = await pedidoDe(cliente)
+    gateway.foraDoAr = true
+    await pagamentoPendente(cliente, pedido).catch(() => {})
+    const pagamento = await Pagamento.findByOrFail('pedidoId', pedido.id)
+    assert.isNull(pagamento.referenciaExterna)
+
+    const response = await enviarWebhook(
+      client,
+      eventoPara(pagamento, 'APROVADO', { id: 'pag_do_provedor' })
+    )
+
+    response.assertStatus(204)
+    await pagamento.refresh()
+    assert.equal(pagamento.referenciaExterna, 'pag_do_provedor')
+    assert.equal(pagamento.status, 'APROVADO')
+  })
+
+  test('pedido pago nao aceita nova solicitacao de pagamento', async ({ client, assert }) => {
+    const cliente = await criarUsuario('CLIENTE')
+    const pedido = await pedidoDe(cliente)
+    const pagamento = await pagamentoPendente(cliente, pedido)
+    await enviarWebhook(client, eventoPara(pagamento, 'APROVADO'))
+
+    const response = await client
+      .post(`/api/v1/pedidos/${pedido.id}/pagamento`)
+      .json({ metodo: 'PIX' })
+      .loginAs(cliente)
+
+    response.assertStatus(409)
+    assert.equal(errorBody(response).error, 'PEDIDO_NAO_AGUARDA_PAGAMENTO')
+  })
+
+  test('entregas simultaneas esperam a trava e devolvem o estoque uma unica vez', async ({
+    client,
+    assert,
+  }) => {
+    const cliente = await criarUsuario('CLIENTE')
+    const { pedido, unidade, tapioca } = await pedidoComDoisItens(cliente)
+    const pagamento = await pagamentoPendente(cliente, pedido)
+    const evento = eventoPara(pagamento, 'RECUSADO')
+
+    const respostas = await comPedidoTravado(
+      pedido,
+      () => Promise.all([enviarWebhook(client, evento), enviarWebhook(client, evento)]),
+      async () => assert.lengthOf(await MovimentacaoEstoque.query().where('tipo', 'ENTRADA'), 0)
+    )
+
+    respostas.forEach((response) => response.assertStatus(204))
+    assert.equal(await saldoDe(unidade, tapioca), 10)
+    assert.lengthOf(await MovimentacaoEstoque.query().where('tipo', 'ENTRADA'), 2)
+  })
 })
