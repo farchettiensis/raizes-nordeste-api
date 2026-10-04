@@ -4,7 +4,30 @@ API REST da rede de lanchonetes Raízes do Nordeste, construída com AdonisJS 7,
 
 Projeto Multidisciplinar 2026, trilha Back-End (UNINTER).
 
-## Requisitos
+## Estrutura do repositório
+
+| Pasta | O que é |
+|---|---|
+| `api/` | A API REST, em AdonisJS |
+| `pagamento-mock/` | Provedor de pagamento simulado, serviço separado (veja o [README dele](pagamento-mock/README.md)) |
+
+## Execução com Docker
+
+Com Docker e Docker Compose instalados, um comando sobe o PostgreSQL, o pagamento mock e a API, já com as migrations aplicadas e os dados de demonstração:
+
+```bash
+docker compose up --build
+```
+
+| Serviço | URL |
+|---|---|
+| API e Swagger | http://localhost:3333/docs |
+| Pagamento mock | http://localhost:4000/openapi.yaml |
+| PostgreSQL | `127.0.0.1:5433`, usuário e senha `postgres` |
+
+As variáveis do `docker-compose.yml` são de demonstração local, inclusive o `APP_KEY` e o segredo do webhook. Para desenvolver, o caminho abaixo, com a API rodando direto no host, dá recarga automática.
+
+## Requisitos para rodar no host
 
 - Node.js 24 ou superior
 - npm 11 ou superior
