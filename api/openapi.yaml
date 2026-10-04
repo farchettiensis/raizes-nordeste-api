@@ -24,6 +24,10 @@ tags:
     description: Unidades da rede, o cardápio e o estoque de cada uma
   - name: Pedidos
     description: Criacao de pedidos, com validacao de cardapio e estoque da unidade
+  - name: Pagamentos
+    description: |
+      Pagamento por um provedor externo (simulado pelo servico pagamento-mock).
+      A API solicita o pagamento e recebe o resultado depois, por webhook.
 
 security:
   - bearerAuth: []
@@ -315,6 +319,61 @@ paths:
         '422':
           $ref: '#/components/responses/DadosInvalidos'
 
+  /api/v1/pedidos/{id}/pagamento:
+    post:
+      tags: [Pagamentos]
+      summary: Solicita o pagamento de um pedido ao provedor externo
+      description: |
+        Envia o pedido ao provedor de pagamento e devolve o pagamento como
+        PENDENTE, com 202: o resultado chega depois, pelo webhook do provedor,
+        e e entao que o pedido vai para PAGO ou CANCELADO. Para PIX, a resposta
+        traz o codigo copia e cola que o cliente usa no app do banco.
+
+        So o CLIENTE dono do pedido pode paga-lo, e so enquanto o pedido esta
+        AGUARDANDO_PAGAMENTO. O valor vem do total do pedido, nunca do corpo.
+        A API nao recebe dados de cartao: a captura e feita pelo app cliente
+        direto no provedor.
+
+        Idempotente por pedido: repetir a chamada com o mesmo metodo devolve o
+        mesmo pagamento, sem cobrar de novo. Se o provedor nao respondeu (503),
+        repetir a chamada reenvia a mesma solicitacao com a mesma chave de
+        idempotencia. Trocar o metodo com um pagamento em andamento e 409.
+      parameters:
+        - $ref: '#/components/parameters/PedidoId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NovoPagamento'
+            example:
+              metodo: PIX
+      responses:
+        '202':
+          description: Pagamento solicitado, aguardando o resultado do provedor
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Pagamento'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissaoNoPedido'
+        '404':
+          $ref: '#/components/responses/PedidoNaoEncontrado'
+        '409':
+          $ref: '#/components/responses/PagamentoEmConflito'
+        '422':
+          $ref: '#/components/responses/DadosInvalidos'
+        '502':
+          $ref: '#/components/responses/GatewayPagamentoErro'
+        '503':
+          $ref: '#/components/responses/GatewayPagamentoIndisponivel'
+
 components:
   parameters:
     Page:
@@ -342,6 +401,14 @@ components:
       schema:
         type: integer
         example: 1
+    PedidoId:
+      name: id
+      in: path
+      required: true
+      description: Identificador do pedido
+      schema:
+        type: integer
+        example: 9001
 
   securitySchemes:
     bearerAuth:
@@ -578,6 +645,75 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ItemDoPedido'
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-02-05T12:00:00.000Z'
+
+    NovoPagamento:
+      type: object
+      required: [metodo]
+      properties:
+        metodo:
+          type: string
+          description: DINHEIRO nao passa pelo provedor externo e fica fora desta rota
+          enum: [PIX, CARTAO_CREDITO, CARTAO_DEBITO]
+
+    Pagamento:
+      type: object
+      required:
+        [
+          pagamentoId,
+          pedidoId,
+          status,
+          metodo,
+          valor,
+          referenciaExterna,
+          motivoRecusa,
+          pix,
+          processadoEm,
+          createdAt,
+        ]
+      properties:
+        pagamentoId:
+          type: integer
+          example: 17
+        pedidoId:
+          type: integer
+          example: 9001
+        status:
+          type: string
+          enum: [PENDENTE, APROVADO, RECUSADO, ESTORNADO]
+          example: PENDENTE
+        metodo:
+          type: string
+          enum: [PIX, CARTAO_CREDITO, CARTAO_DEBITO, DINHEIRO]
+          example: PIX
+        valor:
+          type: string
+          example: '60.15'
+        referenciaExterna:
+          type: string
+          nullable: true
+          description: Identificador do pagamento no provedor
+          example: pag_0d4f8a8e-3b9e-4b8a-9f57-2f5d1f1f8b10
+        motivoRecusa:
+          type: string
+          nullable: true
+          example: null
+        pix:
+          type: object
+          nullable: true
+          required: [copiaECola]
+          properties:
+            copiaECola:
+              type: string
+              example: PIX-MOCK-3F9A0C1B2D4E5F6A7B8C9D0E
+        processadoEm:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
         createdAt:
           type: string
           format: date-time
@@ -834,3 +970,101 @@ components:
                 timestamp: '2026-02-05T12:00:00.000Z'
                 path: /api/v1/pedidos
                 requestId: 5fb16172-8394-4ea5-8f16-d02718293a4b
+
+    SemPermissaoNoPedido:
+      description: Perfil sem permissao ou pedido de outro cliente
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          examples:
+            perfil:
+              value:
+                error: SEM_PERMISSAO
+                message: Seu perfil nao tem permissao para esta acao.
+                details: []
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/pedidos/9001/pagamento
+                requestId: 6a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d
+            posse:
+              value:
+                error: SEM_PERMISSAO
+                message: Este pedido pertence a outro cliente.
+                details: []
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/pedidos/9001/pagamento
+                requestId: 7b1c2d3e-4f5a-4b6c-9d7e-8f9a0b1c2d3e
+
+    PedidoNaoEncontrado:
+      description: O pedido informado nao existe
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          example:
+            error: PEDIDO_NAO_ENCONTRADO
+            message: O pedido informado nao existe.
+            details:
+              - field: id
+                issue: Pedido 9999 nao encontrado
+            timestamp: '2026-02-05T12:00:00.000Z'
+            path: /api/v1/pedidos/9999/pagamento
+            requestId: 8c2d3e4f-5a6b-4c7d-8e9f-a0b1c2d3e4f5
+
+    PagamentoEmConflito:
+      description: Pedido fora de AGUARDANDO_PAGAMENTO ou pagamento em andamento com outro metodo
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          examples:
+            pedidoNaoAguardaPagamento:
+              value:
+                error: PEDIDO_NAO_AGUARDA_PAGAMENTO
+                message: O pedido nao esta aguardando pagamento.
+                details:
+                  - field: status
+                    issue: 'Status atual: PAGO'
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/pedidos/9001/pagamento
+                requestId: 9d3e4f5a-6b7c-4d8e-9fa0-b1c2d3e4f5a6
+            pagamentoEmAndamento:
+              value:
+                error: PAGAMENTO_EM_ANDAMENTO
+                message: Ja existe um pagamento em andamento para este pedido.
+                details:
+                  - field: metodo
+                    issue: Pagamento em andamento com PIX
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/pedidos/9001/pagamento
+                requestId: ae4f5a6b-7c8d-4e9f-a0b1-c2d3e4f5a6b7
+
+    GatewayPagamentoErro:
+      description: O provedor de pagamento devolveu uma resposta fora do contrato
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          example:
+            error: GATEWAY_PAGAMENTO_ERRO
+            message: O provedor de pagamento devolveu uma resposta inesperada.
+            details: []
+            timestamp: '2026-02-05T12:00:00.000Z'
+            path: /api/v1/pedidos/9001/pagamento
+            requestId: bf5a6b7c-8d9e-4fa0-b1c2-d3e4f5a6b7c8
+
+    GatewayPagamentoIndisponivel:
+      description: |
+        O provedor nao respondeu depois das retentativas. O pagamento fica
+        PENDENTE e repetir a chamada reenvia a mesma solicitacao.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          example:
+            error: GATEWAY_PAGAMENTO_INDISPONIVEL
+            message: O provedor de pagamento nao respondeu. Tente novamente.
+            details: []
+            timestamp: '2026-02-05T12:00:00.000Z'
+            path: /api/v1/pedidos/9001/pagamento
+            requestId: c06b7c8d-9eaf-4b01-82c3-e4f5a6b7c8d9

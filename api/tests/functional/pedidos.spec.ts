@@ -224,7 +224,7 @@ test.group('Criacao de pedido', (group) => {
 
     const response = await client
       .post('/api/v1/pedidos')
-      .json({ unidadeId: unidade.id, itens: [{ produtoId: produto.id, quantidade: 1 }] })
+      .json({ unidadeId: unidade.id, itens: [{ produtoId: produto.id, quantidade: 1 }] } as never)
       .loginAs(cliente)
 
     response.assertStatus(422)
@@ -246,7 +246,7 @@ test.group('Criacao de pedido', (group) => {
         unidadeId: unidade.id,
         canalPedido: 'DRIVE_THRU',
         itens: [{ produtoId: produto.id, quantidade: 1 }],
-      })
+      } as never)
       .loginAs(cliente)
 
     response.assertStatus(422)

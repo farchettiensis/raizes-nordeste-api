@@ -27,6 +27,12 @@ export interface ApiDefinition {
       index: typeof routes['unidades.estoques.index']
     }
   }
+  pedidos: {
+    store: typeof routes['pedidos.store']
+    pagamento: {
+      store: typeof routes['pedidos.pagamento.store']
+    }
+  }
   profile: {
     profile: {
       show: typeof routes['profile.profile.show']

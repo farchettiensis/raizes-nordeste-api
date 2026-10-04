@@ -49,6 +49,10 @@ export default class Pedido extends PedidoSchema {
     return TRANSICOES_STATUS_PEDIDO[this.status].length === 0
   }
 
+  pertenceA(usuario: User) {
+    return this.clienteId === usuario.id
+  }
+
   podeTransicionarPara(destino: StatusPedido) {
     return TRANSICOES_STATUS_PEDIDO[this.status].includes(destino)
   }

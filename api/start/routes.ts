@@ -33,8 +33,15 @@ router
       .as('unidades')
 
     router
-      .post('pedidos', [controllers.Pedidos, 'store'])
-      .as('pedidos.store')
+      .group(() => {
+        router.post('/', [controllers.Pedidos, 'store']).as('store')
+        router
+          .post(':id/pagamento', [controllers.Pagamentos, 'store'])
+          .where('id', router.matchers.number())
+          .as('pagamento.store')
+      })
+      .prefix('pedidos')
+      .as('pedidos')
       .use(middleware.perfil({ perfis: ['CLIENTE'] }))
 
     router

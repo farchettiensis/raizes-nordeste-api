@@ -10,6 +10,7 @@ import Pedido, { type CanalPedido } from '#models/pedido'
 import Unidade from '#models/unidade'
 import UnidadeProduto from '#models/unidade_produto'
 import type User from '#models/user'
+import { emCentavos, emReais } from '#services/centavos'
 
 export type ItemSolicitado = {
   produtoId: number
@@ -23,12 +24,23 @@ export type NovoPedido = {
   observacoes?: string
 }
 
-function emCentavos(valor: string) {
-  return Math.round(Number(valor) * 100)
-}
+export function garantirPedidoDoCliente(pedido: Pedido | null, cliente: User, pedidoId: number) {
+  if (!pedido) {
+    throw new ApiException('O pedido informado nao existe.', {
+      code: 'PEDIDO_NAO_ENCONTRADO',
+      status: 404,
+      details: [{ field: 'id', issue: `Pedido ${pedidoId} nao encontrado` }],
+    })
+  }
 
-function emReais(centavos: number) {
-  return (centavos / 100).toFixed(2)
+  if (!pedido.pertenceA(cliente)) {
+    throw new ApiException('Este pedido pertence a outro cliente.', {
+      code: 'SEM_PERMISSAO',
+      status: 403,
+    })
+  }
+
+  return pedido
 }
 
 function gerarCodigo() {

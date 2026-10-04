@@ -32,4 +32,8 @@ export default class Pagamento extends PagamentoSchema {
   get pendente() {
     return this.status === 'PENDENTE'
   }
+
+  get pixCopiaECola(): string | null {
+    return this.payloadResposta?.pix?.copiaECola ?? null
+  }
 }
