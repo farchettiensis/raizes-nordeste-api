@@ -66,6 +66,12 @@ const routes = {
     tokens: [{"old":"/api/v1/pedidos","type":0,"val":"api","end":""},{"old":"/api/v1/pedidos","type":0,"val":"v1","end":""},{"old":"/api/v1/pedidos","type":0,"val":"pedidos","end":""}],
     types: placeholder as Registry['pedidos.store']['types'],
   },
+  'pedidos.show': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/pedidos/:id',
+    tokens: [{"old":"/api/v1/pedidos/:id","type":0,"val":"api","end":""},{"old":"/api/v1/pedidos/:id","type":0,"val":"v1","end":""},{"old":"/api/v1/pedidos/:id","type":0,"val":"pedidos","end":""},{"old":"/api/v1/pedidos/:id","type":1,"val":"id","end":""}],
+    types: placeholder as Registry['pedidos.show']['types'],
+  },
   'pedidos.pagamento.store': {
     methods: ["POST"],
     pattern: '/api/v1/pedidos/:id/pagamento',

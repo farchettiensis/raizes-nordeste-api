@@ -319,6 +319,37 @@ paths:
         '422':
           $ref: '#/components/responses/DadosInvalidos'
 
+  /api/v1/pedidos/{id}:
+    get:
+      tags: [Pedidos]
+      summary: Consulta um pedido do cliente autenticado, com o pagamento
+      description: |
+        Devolve o pedido com os itens e o pagamento, se houver. E por aqui que o
+        cliente acompanha o resultado do pagamento, que chega de forma
+        assincrona: o pedido sai de AGUARDANDO_PAGAMENTO para PAGO ou
+        CANCELADO quando o provedor responde.
+
+        So o CLIENTE dono do pedido pode consulta-lo.
+      parameters:
+        - $ref: '#/components/parameters/PedidoId'
+      responses:
+        '200':
+          description: Pedido encontrado
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Pedido'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissaoNoPedido'
+        '404':
+          $ref: '#/components/responses/PedidoNaoEncontrado'
+
   /api/v1/pedidos/{id}/pagamento:
     post:
       tags: [Pagamentos]
@@ -697,6 +728,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ItemDoPedido'
+        pagamento:
+          description: Presente na consulta do pedido; nulo enquanto nao houver pagamento
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Pagamento'
         createdAt:
           type: string
           format: date-time

@@ -1,4 +1,5 @@
 import type Pedido from '#models/pedido'
+import PagamentoTransformer from '#transformers/pagamento_transformer'
 import { BaseTransformer } from '@adonisjs/core/transformers'
 
 export default class PedidoTransformer extends BaseTransformer<Pedido> {
@@ -22,6 +23,7 @@ export default class PedidoTransformer extends BaseTransformer<Pedido> {
         precoUnitario: item.precoUnitario,
         subtotal: item.subtotal,
       })),
+      pagamento: PagamentoTransformer.transform(this.whenLoaded(this.resource.pagamento)),
       createdAt: createdAt.toISO(),
     }
   }

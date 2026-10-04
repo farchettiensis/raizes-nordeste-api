@@ -441,6 +441,12 @@ async function pagamentoPendente(cliente: User, pedido: Pedido) {
 }
 
 test.group('Webhook de pagamento', (group) => {
+  group.setup(() => {
+    app.container.swap(GatewayPagamento, () => gateway)
+
+    return () => app.container.restore(GatewayPagamento)
+  })
+
   group.each.setup(() => {
     gateway.reiniciar()
 
@@ -669,6 +675,30 @@ test.group('Webhook de pagamento', (group) => {
 
     response.assertStatus(409)
     assert.equal(errorBody(response).error, 'PEDIDO_NAO_AGUARDA_PAGAMENTO')
+  })
+
+  test('o cliente acompanha o resultado consultando o pedido', async ({ client, assert }) => {
+    const cliente = await criarUsuario('CLIENTE')
+    const pedido = await pedidoDe(cliente)
+    const solicitacao = await client
+      .post(`/api/v1/pedidos/${pedido.id}/pagamento`)
+      .json({ metodo: 'PIX' })
+      .loginAs(cliente)
+    const pagamento = await Pagamento.findOrFail(pagamentoRespondido(solicitacao).data.pagamentoId)
+
+    const antes = await client.get(`/api/v1/pedidos/${pedido.id}`).loginAs(cliente)
+    await enviarWebhook(client, eventoPara(pagamento, 'RECUSADO'))
+    const depois = await client.get(`/api/v1/pedidos/${pedido.id}`).loginAs(cliente)
+
+    assert.containsSubset(antes.body(), {
+      data: { status: 'AGUARDANDO_PAGAMENTO', pagamento: { status: 'PENDENTE' } },
+    })
+    assert.containsSubset(depois.body(), {
+      data: {
+        status: 'CANCELADO',
+        pagamento: { status: 'RECUSADO', motivoRecusa: MOTIVO, metodo: 'PIX' },
+      },
+    })
   })
 
   test('entregas simultaneas esperam a trava e devolvem o estoque uma unica vez', async ({

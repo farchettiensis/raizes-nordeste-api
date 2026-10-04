@@ -36,6 +36,10 @@ router
       .group(() => {
         router.post('/', [controllers.Pedidos, 'store']).as('store')
         router
+          .get(':id', [controllers.Pedidos, 'show'])
+          .where('id', router.matchers.number())
+          .as('show')
+        router
           .post(':id/pagamento', [controllers.Pagamentos, 'store'])
           .where('id', router.matchers.number())
           .as('pagamento.store')

@@ -51,6 +51,16 @@ function gerarCodigo() {
 }
 
 export default class PedidoService {
+  async doCliente(cliente: User, pedidoId: number) {
+    const pedido = await Pedido.query()
+      .where('id', pedidoId)
+      .preload('itens', (itens) => itens.orderBy('id'))
+      .preload('pagamento')
+      .first()
+
+    return garantirPedidoDoCliente(pedido, cliente, pedidoId)
+  }
+
   async criar(cliente: User, dados: NovoPedido) {
     const pedido = await db.transaction(async (trx) => {
       const unidade = await this.unidadeAberta(dados.unidadeId, trx)

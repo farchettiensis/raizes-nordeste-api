@@ -8,6 +8,7 @@ import PedidoItem from '#models/pedido_item'
 import type Produto from '#models/produto'
 import type Unidade from '#models/unidade'
 import UnidadeProduto from '#models/unidade_produto'
+import PedidoService from '#services/pedido_service'
 import {
   criarCardapio,
   criarEstoque,
@@ -35,6 +36,7 @@ type PedidoCriado = {
     desconto: string
     total: string
     itens: ItemDoPedido[]
+    pagamento?: { status: string } | null
     createdAt: string
   }
 }
@@ -157,6 +159,7 @@ test.group('Criacao de pedido', (group) => {
     })
     assert.isString(data.codigo)
     assert.notProperty(data, 'clienteId')
+    assert.notProperty(data, 'pagamento')
 
     const pedido = await Pedido.findOrFail(data.pedidoId)
     assert.equal(pedido.clienteId, cliente.id)
@@ -476,5 +479,77 @@ test.group('Criacao de pedido', (group) => {
     )
     assert.equal(await saldoDe(unidade, produto), 0)
     assert.lengthOf(await Pedido.all(), 1)
+  })
+})
+
+test.group('Consulta de pedido', (group) => {
+  group.each.setup(() => testUtils.db().truncate())
+
+  async function pedidoDe(cliente: Awaited<ReturnType<typeof criarUsuario>>) {
+    const unidade = await criarUnidade()
+    const produto = await ofertar(unidade, '18.50', 5)
+
+    return new PedidoService().criar(cliente, {
+      unidadeId: unidade.id,
+      canalPedido: 'WEB',
+      itens: [{ produtoId: produto.id, quantidade: 2 }],
+    })
+  }
+
+  test('sem token responde 401', async ({ client }) => {
+    const pedido = await pedidoDe(await criarUsuario('CLIENTE'))
+
+    const response = await client.get(`/api/v1/pedidos/${pedido.id}`)
+
+    response.assertStatus(401)
+  })
+
+  test('um perfil da operacao nao consulta por esta rota', async ({ client }) => {
+    const pedido = await pedidoDe(await criarUsuario('CLIENTE'))
+
+    const response = await client
+      .get(`/api/v1/pedidos/${pedido.id}`)
+      .loginAs(await criarUsuario('ATENDENTE'))
+
+    response.assertStatus(403)
+  })
+
+  test('o cliente nao consulta o pedido de outro cliente', async ({ client, assert }) => {
+    const pedido = await pedidoDe(await criarUsuario('CLIENTE'))
+
+    const response = await client
+      .get(`/api/v1/pedidos/${pedido.id}`)
+      .loginAs(await criarUsuario('CLIENTE'))
+
+    response.assertStatus(403)
+    assert.equal(errorBody(response).message, 'Este pedido pertence a outro cliente.')
+  })
+
+  test('pedido inexistente responde 404', async ({ client, assert }) => {
+    const response = await client
+      .get('/api/v1/pedidos/999999')
+      .loginAs(await criarUsuario('CLIENTE'))
+
+    response.assertStatus(404)
+    assert.equal(errorBody(response).error, 'PEDIDO_NAO_ENCONTRADO')
+  })
+
+  test('devolve o pedido com os itens e sem pagamento ainda', async ({ client, assert }) => {
+    const cliente = await criarUsuario('CLIENTE')
+    const pedido = await pedidoDe(cliente)
+
+    const response = await client.get(`/api/v1/pedidos/${pedido.id}`).loginAs(cliente)
+
+    response.assertStatus(200)
+    const { data } = pedidoCriado(response)
+    assert.containsSubset(data, {
+      pedidoId: pedido.id,
+      codigo: pedido.codigo,
+      canalPedido: 'WEB',
+      status: 'AGUARDANDO_PAGAMENTO',
+      total: '37.00',
+      pagamento: null,
+    })
+    assert.lengthOf(data.itens, 1)
   })
 })

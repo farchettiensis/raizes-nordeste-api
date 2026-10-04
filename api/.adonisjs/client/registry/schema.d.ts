@@ -127,6 +127,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/pedidos_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'pedidos.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/pedidos/:id'
+    types: {
+      body: {}
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/pedidos_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/pedidos_controller').default['show']>>>
+    }
+  }
   'pedidos.pagamento.store': {
     methods: ["POST"]
     pattern: '/api/v1/pedidos/:id/pagamento'

@@ -29,6 +29,7 @@ export interface ApiDefinition {
   }
   pedidos: {
     store: typeof routes['pedidos.store']
+    show: typeof routes['pedidos.show']
     pagamento: {
       store: typeof routes['pedidos.pagamento.store']
     }
