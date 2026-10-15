@@ -4,7 +4,7 @@ import { PedidoSchema } from '#database/schema'
 import Pagamento from '#models/pagamento'
 import PedidoItem from '#models/pedido_item'
 import Unidade from '#models/unidade'
-import User from '#models/user'
+import User, { type PerfilUsuario } from '#models/user'
 
 export const CANAIS_PEDIDO = ['APP', 'TOTEM', 'BALCAO', 'PICKUP', 'WEB'] as const
 
@@ -28,6 +28,20 @@ export const TRANSICOES_STATUS_PEDIDO: Record<StatusPedido, StatusPedido[]> = {
   PRONTO: ['ENTREGUE', 'CANCELADO'],
   ENTREGUE: [],
   CANCELADO: [],
+}
+
+const CANCELAM_DEPOIS_DE_PAGO: PerfilUsuario[] = ['GERENTE', 'ADMIN']
+
+export const PERFIS_POR_TRANSICAO: Record<
+  StatusPedido,
+  Partial<Record<StatusPedido, PerfilUsuario[]>>
+> = {
+  AGUARDANDO_PAGAMENTO: { CANCELADO: ['CLIENTE', 'ATENDENTE', 'GERENTE', 'ADMIN'] },
+  PAGO: { EM_PREPARO: ['COZINHA', 'GERENTE'], CANCELADO: CANCELAM_DEPOIS_DE_PAGO },
+  EM_PREPARO: { PRONTO: ['COZINHA', 'GERENTE'], CANCELADO: CANCELAM_DEPOIS_DE_PAGO },
+  PRONTO: { ENTREGUE: ['ATENDENTE', 'GERENTE'], CANCELADO: CANCELAM_DEPOIS_DE_PAGO },
+  ENTREGUE: {},
+  CANCELADO: {},
 }
 
 export default class Pedido extends PedidoSchema {
@@ -75,5 +89,15 @@ export default class Pedido extends PedidoSchema {
 
   podeTransicionarPara(destino: StatusPedido) {
     return TRANSICOES_STATUS_PEDIDO[this.status].includes(destino)
+  }
+
+  podeSerTransicionadoPor(usuario: User, destino: StatusPedido) {
+    const perfis = PERFIS_POR_TRANSICAO[this.status][destino] ?? []
+
+    return (
+      this.podeTransicionarPara(destino) &&
+      usuario.temPerfil(...perfis) &&
+      this.visivelPara(usuario)
+    )
   }
 }

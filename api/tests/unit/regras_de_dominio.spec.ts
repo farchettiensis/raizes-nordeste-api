@@ -209,3 +209,91 @@ test.group('Perfis de usuario', () => {
     assert.isTrue(comConsentimento.consentiuFidelidade)
   })
 })
+
+test.group('Permissoes de transicao do pedido', () => {
+  const UNIDADE = 1
+  const DONO = 10
+
+  function pedidoDaUnidade(status: StatusPedido) {
+    const pedido = pedidoCom(status)
+    pedido.unidadeId = UNIDADE
+    pedido.clienteId = DONO
+
+    return pedido
+  }
+
+  function usuario(perfil: User['perfil'], atributos: Partial<User> = {}) {
+    const pessoa = new User()
+    pessoa.id = 99
+    pessoa.perfil = perfil
+    pessoa.unidadeId = perfil === 'CLIENTE' || perfil === 'ADMIN' ? null : UNIDADE
+
+    return Object.assign(pessoa, atributos)
+  }
+
+  function quemPode(origem: StatusPedido, destino: StatusPedido) {
+    const pedido = pedidoDaUnidade(origem)
+    const candidatos = [
+      usuario('CLIENTE', { id: DONO }),
+      usuario('ATENDENTE'),
+      usuario('COZINHA'),
+      usuario('GERENTE'),
+      usuario('ADMIN'),
+    ]
+
+    return candidatos
+      .filter((candidato) => pedido.podeSerTransicionadoPor(candidato, destino))
+      .map((candidato) => candidato.perfil)
+  }
+
+  test('a cozinha e o gerente iniciam o preparo e marcam o pedido como pronto', ({ assert }) => {
+    assert.deepEqual(quemPode('PAGO', 'EM_PREPARO'), ['COZINHA', 'GERENTE'])
+    assert.deepEqual(quemPode('EM_PREPARO', 'PRONTO'), ['COZINHA', 'GERENTE'])
+  })
+
+  test('o atendente e o gerente entregam o pedido pronto', ({ assert }) => {
+    assert.deepEqual(quemPode('PRONTO', 'ENTREGUE'), ['ATENDENTE', 'GERENTE'])
+  })
+
+  test('aguardando pagamento, cancelam o dono, o atendente, o gerente e o admin', ({ assert }) => {
+    assert.deepEqual(quemPode('AGUARDANDO_PAGAMENTO', 'CANCELADO'), [
+      'CLIENTE',
+      'ATENDENTE',
+      'GERENTE',
+      'ADMIN',
+    ])
+  })
+
+  test('depois de pago, so o gerente e o admin cancelam', ({ assert }) => {
+    for (const origem of ['PAGO', 'EM_PREPARO', 'PRONTO'] as const) {
+      assert.deepEqual(quemPode(origem, 'CANCELADO'), ['GERENTE', 'ADMIN'], origem)
+    }
+  })
+
+  test('ninguem marca o pedido como pago, que so vem do webhook', ({ assert }) => {
+    assert.deepEqual(quemPode('AGUARDANDO_PAGAMENTO', 'PAGO'), [])
+  })
+
+  test('transicoes fora do ciclo de vida nao sao permitidas a ninguem', ({ assert }) => {
+    assert.deepEqual(quemPode('PAGO', 'PRONTO'), [])
+    assert.deepEqual(quemPode('ENTREGUE', 'CANCELADO'), [])
+    assert.deepEqual(quemPode('CANCELADO', 'EM_PREPARO'), [])
+  })
+
+  test('o cliente so cancela o proprio pedido', ({ assert }) => {
+    const pedido = pedidoDaUnidade('AGUARDANDO_PAGAMENTO')
+
+    assert.isFalse(pedido.podeSerTransicionadoPor(usuario('CLIENTE', { id: 11 }), 'CANCELADO'))
+  })
+
+  test('a equipe so age sobre pedidos da propria unidade', ({ assert }) => {
+    const pedido = pedidoDaUnidade('PAGO')
+
+    assert.isFalse(
+      pedido.podeSerTransicionadoPor(usuario('COZINHA', { unidadeId: 2 }), 'EM_PREPARO')
+    )
+    assert.isFalse(
+      pedido.podeSerTransicionadoPor(usuario('GERENTE', { unidadeId: null }), 'CANCELADO')
+    )
+  })
+})
