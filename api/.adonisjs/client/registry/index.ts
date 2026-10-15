@@ -60,6 +60,12 @@ const routes = {
     tokens: [{"old":"/api/v1/unidades/:id/estoque","type":0,"val":"api","end":""},{"old":"/api/v1/unidades/:id/estoque","type":0,"val":"v1","end":""},{"old":"/api/v1/unidades/:id/estoque","type":0,"val":"unidades","end":""},{"old":"/api/v1/unidades/:id/estoque","type":1,"val":"id","end":""},{"old":"/api/v1/unidades/:id/estoque","type":0,"val":"estoque","end":""}],
     types: placeholder as Registry['unidades.estoques.index']['types'],
   },
+  'pedidos.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/pedidos',
+    tokens: [{"old":"/api/v1/pedidos","type":0,"val":"api","end":""},{"old":"/api/v1/pedidos","type":0,"val":"v1","end":""},{"old":"/api/v1/pedidos","type":0,"val":"pedidos","end":""}],
+    types: placeholder as Registry['pedidos.index']['types'],
+  },
   'pedidos.store': {
     methods: ["POST"],
     pattern: '/api/v1/pedidos',

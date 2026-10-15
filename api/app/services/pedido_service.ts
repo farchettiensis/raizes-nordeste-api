@@ -6,12 +6,16 @@ import { DateTime } from 'luxon'
 import ApiException, { type ErrorDetail } from '#exceptions/api_exception'
 import Estoque from '#models/estoque'
 import MovimentacaoEstoque from '#models/movimentacao_estoque'
-import Pedido, { type CanalPedido } from '#models/pedido'
+import Pedido, { type CanalPedido, type StatusPedido } from '#models/pedido'
 import Unidade from '#models/unidade'
 import UnidadeProduto from '#models/unidade_produto'
 import type User from '#models/user'
 import { emCentavos, emReais } from '#services/centavos'
-import { garantirPedidoVisivel } from '#services/escopo_de_acesso'
+import {
+  garantirAcessoAUnidade,
+  garantirPedidoVisivel,
+  garantirUnidadeVinculada,
+} from '#services/escopo_de_acesso'
 
 export type ItemSolicitado = {
   produtoId: number
@@ -25,6 +29,14 @@ export type NovoPedido = {
   observacoes?: string
 }
 
+export type FiltrosDePedidos = {
+  page: number
+  limit: number
+  canalPedido?: CanalPedido
+  status?: StatusPedido
+  unidadeId?: number
+}
+
 function gerarCodigo() {
   const data = DateTime.now().toFormat('yyMMdd')
   const sufixo = randomBytes(4).toString('hex').toUpperCase()
@@ -33,6 +45,25 @@ function gerarCodigo() {
 }
 
 export default class PedidoService {
+  async listarPara(usuario: User, filtros: FiltrosDePedidos) {
+    garantirUnidadeVinculada(usuario)
+
+    if (filtros.unidadeId && usuario.vinculadoAUnidade) {
+      garantirAcessoAUnidade(usuario, filtros.unidadeId)
+    }
+
+    return Pedido.query()
+      .withScopes((escopos) => escopos.visiveisPara(usuario))
+      .if(filtros.unidadeId, (query) => query.where('unidadeId', filtros.unidadeId!))
+      .if(filtros.canalPedido, (query) => query.where('canalPedido', filtros.canalPedido!))
+      .if(filtros.status, (query) => query.where('status', filtros.status!))
+      .preload('itens', (itens) => itens.orderBy('id'))
+      .preload('pagamento')
+      .orderBy('createdAt', 'desc')
+      .orderBy('id', 'desc')
+      .paginate(filtros.page, filtros.limit)
+  }
+
   async visivelPara(usuario: User, pedidoId: number) {
     const pedido = await Pedido.query()
       .where('id', pedidoId)

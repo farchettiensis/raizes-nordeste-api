@@ -267,6 +267,60 @@ paths:
           $ref: '#/components/responses/DadosInvalidos'
 
   /api/v1/pedidos:
+    get:
+      tags: [Pedidos]
+      summary: Lista pedidos, com filtros por canal, status e unidade
+      description: |
+        Lista paginada dos pedidos dentro do escopo do usuario: o CLIENTE ve
+        os proprios pedidos; ATENDENTE, COZINHA e GERENTE, os da unidade a que
+        estao vinculados; ADMIN, todos. Um perfil de unidade sem unidade
+        vinculada recebe 403 SEM_UNIDADE_VINCULADA.
+
+        Os filtros se combinam, por exemplo
+        `?canalPedido=APP&status=AGUARDANDO_PAGAMENTO`. O filtro `unidadeId`
+        vale para ADMIN e CLIENTE; para um perfil de unidade, so a propria
+        unidade e aceita, e outra responde 403.
+
+        Ordem: mais recentes primeiro, com desempate pelo id.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+        - name: canalPedido
+          in: query
+          schema:
+            type: string
+            enum: [APP, TOTEM, BALCAO, PICKUP, WEB]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [AGUARDANDO_PAGAMENTO, PAGO, EM_PREPARO, PRONTO, ENTREGUE, CANCELADO]
+        - name: unidadeId
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Pedidos paginados, com itens e pagamento
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, metadata]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Pedido'
+                  metadata:
+                    $ref: '#/components/schemas/PaginationMetadata'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/ForaDoEscopoDaListagem'
+        '422':
+          $ref: '#/components/responses/DadosInvalidos'
     post:
       tags: [Pedidos]
       summary: Cria um pedido validando o cardapio e o estoque da unidade
@@ -1134,6 +1188,30 @@ components:
                 timestamp: '2026-02-05T12:00:00.000Z'
                 path: /api/v1/pedidos/9001/pagamento
                 requestId: 7b1c2d3e-4f5a-4b6c-9d7e-8f9a0b1c2d3e
+
+    ForaDoEscopoDaListagem:
+      description: Filtro por outra unidade ou perfil de unidade sem unidade vinculada
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          examples:
+            outraUnidade:
+              value:
+                error: SEM_PERMISSAO
+                message: Esta unidade nao e a sua.
+                details: []
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/pedidos
+                requestId: 0e4f5a6b-7c8d-4e9f-8a1b-2c3d4e5f6a7b
+            semUnidade:
+              value:
+                error: SEM_UNIDADE_VINCULADA
+                message: Seu usuario nao esta vinculado a nenhuma unidade.
+                details: []
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/pedidos
+                requestId: 1f5a6b7c-8d9e-4f0a-9b2c-3d4e5f6a7b8c
 
     ForaDoEscopoDoPedido:
       description: Pedido fora do escopo do usuario ou perfil de unidade sem unidade vinculada

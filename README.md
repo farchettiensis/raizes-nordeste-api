@@ -140,6 +140,7 @@ O Swagger em `/docs` traz os exemplos de request e response de cada um. Esta tab
 | GET | `/api/v1/unidades/:id` | pública | Detalhe de uma unidade |
 | GET | `/api/v1/unidades/:id/cardapio` | pública | Cardápio da unidade, com preço e disponibilidade |
 | GET | `/api/v1/unidades/:id/estoque` | token, perfis da operação, própria unidade | Saldo de estoque da unidade, produto a produto |
+| GET | `/api/v1/pedidos` | token, pedidos no escopo do usuário | Lista pedidos, filtrando por `canalPedido`, `status` e `unidadeId` |
 | POST | `/api/v1/pedidos` | token, perfil CLIENTE | Cria o pedido validando cardápio e estoque da unidade |
 | GET | `/api/v1/pedidos/:id` | token, pedido no escopo do usuário | Pedido com itens e pagamento |
 | POST | `/api/v1/pedidos/:id/pagamento` | token, perfil CLIENTE, dono do pedido | Solicita o pagamento ao provedor externo |

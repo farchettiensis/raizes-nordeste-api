@@ -10,8 +10,10 @@ import type Unidade from '#models/unidade'
 import UnidadeProduto from '#models/unidade_produto'
 import PedidoService from '#services/pedido_service'
 import {
+  agora,
   criarCardapio,
   criarEstoque,
+  criarPedido,
   criarProduto,
   criarUnidade,
   criarUsuario,
@@ -48,6 +50,19 @@ type ErrorBody = {
   timestamp: string
   path: string
   requestId: string
+}
+
+type PedidosListados = {
+  data: PedidoCriado['data'][]
+  metadata: { total: number; perPage: number; currentPage: number; lastPage: number }
+}
+
+function pedidosListados(response: { body(): unknown }) {
+  return response.body() as PedidosListados
+}
+
+function codigosListados(response: { body(): unknown }) {
+  return pedidosListados(response).data.map((pedido) => pedido.codigo)
 }
 
 function pedidoCriado(response: { body(): unknown }) {
@@ -587,5 +602,186 @@ test.group('Consulta de pedido', (group) => {
       canceladoEm: null,
     })
     assert.lengthOf(data.itens, 1)
+  })
+})
+
+test.group('Listagem de pedidos', (group) => {
+  group.each.setup(() => testUtils.db().truncate())
+
+  test('sem token responde 401', async ({ client, assert }) => {
+    const response = await client.get('/api/v1/pedidos')
+
+    response.assertStatus(401)
+    assert.equal(errorBody(response).error, 'NAO_AUTENTICADO')
+  })
+
+  test('o cliente lista so os proprios pedidos', async ({ client, assert }) => {
+    const unidade = await criarUnidade()
+    const cliente = await criarUsuario('CLIENTE')
+    const meu = await criarPedido(unidade, cliente)
+    await criarPedido(unidade, await criarUsuario('CLIENTE'))
+
+    const response = await client.get('/api/v1/pedidos').loginAs(cliente)
+
+    response.assertStatus(200)
+    assert.deepEqual(codigosListados(response), [meu.codigo])
+  })
+
+  test('a equipe lista so os pedidos da propria unidade', async ({ client, assert }) => {
+    const unidade = await criarUnidade()
+    const outra = await criarUnidade()
+    const cliente = await criarUsuario('CLIENTE')
+    const daUnidade = await criarPedido(unidade, cliente)
+    await criarPedido(outra, cliente)
+
+    for (const perfil of ['ATENDENTE', 'COZINHA', 'GERENTE'] as const) {
+      const equipe = await criarUsuario(perfil, { unidadeId: unidade.id })
+
+      const response = await client.get('/api/v1/pedidos').loginAs(equipe)
+
+      response.assertStatus(200)
+      assert.deepEqual(codigosListados(response), [daUnidade.codigo])
+    }
+  })
+
+  test('o admin lista todos os pedidos e filtra por unidade', async ({ client, assert }) => {
+    const unidade = await criarUnidade()
+    const outra = await criarUnidade()
+    const cliente = await criarUsuario('CLIENTE')
+    const primeiro = await criarPedido(unidade, cliente)
+    const segundo = await criarPedido(outra, cliente)
+    const admin = await criarUsuario('ADMIN')
+
+    const todos = await client.get('/api/v1/pedidos').loginAs(admin)
+    const filtrados = await client.get(`/api/v1/pedidos?unidadeId=${outra.id}`).loginAs(admin)
+
+    assert.sameMembers(codigosListados(todos), [primeiro.codigo, segundo.codigo])
+    assert.deepEqual(codigosListados(filtrados), [segundo.codigo])
+  })
+
+  test('o cliente filtra os proprios pedidos por unidade', async ({ client, assert }) => {
+    const unidade = await criarUnidade()
+    const outra = await criarUnidade()
+    const cliente = await criarUsuario('CLIENTE')
+    await criarPedido(unidade, cliente)
+    const naOutra = await criarPedido(outra, cliente)
+
+    const response = await client.get(`/api/v1/pedidos?unidadeId=${outra.id}`).loginAs(cliente)
+
+    assert.deepEqual(codigosListados(response), [naOutra.codigo])
+  })
+
+  test('a equipe aceita a propria unidade no filtro e recusa outra', async ({ client, assert }) => {
+    const unidade = await criarUnidade()
+    const outra = await criarUnidade()
+    const pedido = await criarPedido(unidade, await criarUsuario('CLIENTE'))
+    const gerente = await criarUsuario('GERENTE', { unidadeId: unidade.id })
+
+    const propria = await client.get(`/api/v1/pedidos?unidadeId=${unidade.id}`).loginAs(gerente)
+    const alheia = await client.get(`/api/v1/pedidos?unidadeId=${outra.id}`).loginAs(gerente)
+
+    propria.assertStatus(200)
+    assert.deepEqual(codigosListados(propria), [pedido.codigo])
+    alheia.assertStatus(403)
+    assert.equal(errorBody(alheia).error, 'SEM_PERMISSAO')
+  })
+
+  test('perfil de unidade sem unidade vinculada responde 403', async ({ client, assert }) => {
+    const response = await client.get('/api/v1/pedidos').loginAs(await criarUsuario('COZINHA'))
+
+    response.assertStatus(403)
+    assert.equal(errorBody(response).error, 'SEM_UNIDADE_VINCULADA')
+  })
+
+  test('filtra por canal, por status e pelos dois juntos', async ({ client, assert }) => {
+    const unidade = await criarUnidade()
+    const cliente = await criarUsuario('CLIENTE')
+    const totemPago = await criarPedido(unidade, cliente, { canalPedido: 'TOTEM', status: 'PAGO' })
+    const totemAguardando = await criarPedido(unidade, cliente, { canalPedido: 'TOTEM' })
+    const appPago = await criarPedido(unidade, cliente, { canalPedido: 'APP', status: 'PAGO' })
+    const admin = await criarUsuario('ADMIN')
+
+    const porCanal = await client.get('/api/v1/pedidos?canalPedido=TOTEM').loginAs(admin)
+    const porStatus = await client.get('/api/v1/pedidos?status=PAGO').loginAs(admin)
+    const combinados = await client
+      .get('/api/v1/pedidos?canalPedido=TOTEM&status=PAGO')
+      .loginAs(admin)
+
+    assert.sameMembers(codigosListados(porCanal), [totemPago.codigo, totemAguardando.codigo])
+    assert.sameMembers(codigosListados(porStatus), [totemPago.codigo, appPago.codigo])
+    assert.deepEqual(codigosListados(combinados), [totemPago.codigo])
+  })
+
+  test('canal ou status fora da lista respondem 422 no formato padrao', async ({
+    client,
+    assert,
+  }) => {
+    const admin = await criarUsuario('ADMIN')
+
+    const canal = await client.get('/api/v1/pedidos?canalPedido=DRIVE').loginAs(admin)
+    const status = await client.get('/api/v1/pedidos?status=PERDIDO').loginAs(admin)
+
+    canal.assertStatus(422)
+    assert.equal(errorBody(canal).error, 'DADOS_INVALIDOS')
+    assert.equal(errorBody(canal).details[0].field, 'canalPedido')
+    status.assertStatus(422)
+    assert.equal(errorBody(status).details[0].field, 'status')
+  })
+
+  test('mais recentes primeiro, com desempate pelo id', async ({ client, assert }) => {
+    const unidade = await criarUnidade()
+    const cliente = await criarUsuario('CLIENTE')
+    const mesmoInstante = agora()
+    const antigo = await criarPedido(unidade, cliente, {
+      createdAt: mesmoInstante.minus({ hours: 1 }),
+    })
+    const primeiroEmpatado = await criarPedido(unidade, cliente, { createdAt: mesmoInstante })
+    const segundoEmpatado = await criarPedido(unidade, cliente, { createdAt: mesmoInstante })
+
+    const response = await client.get('/api/v1/pedidos').loginAs(cliente)
+
+    assert.deepEqual(codigosListados(response), [
+      segundoEmpatado.codigo,
+      primeiroEmpatado.codigo,
+      antigo.codigo,
+    ])
+  })
+
+  test('a listagem e paginada e limita o tamanho da pagina', async ({ client, assert }) => {
+    const unidade = await criarUnidade()
+    const cliente = await criarUsuario('CLIENTE')
+    for (let i = 0; i < 3; i++) {
+      await criarPedido(unidade, cliente)
+    }
+
+    const pagina = await client.get('/api/v1/pedidos?page=2&limit=2').loginAs(cliente)
+    const grandeDemais = await client.get('/api/v1/pedidos?limit=101').loginAs(cliente)
+
+    assert.lengthOf(pedidosListados(pagina).data, 1)
+    assert.containsSubset(pedidosListados(pagina).metadata, {
+      total: 3,
+      perPage: 2,
+      currentPage: 2,
+      lastPage: 2,
+    })
+    grandeDemais.assertStatus(422)
+    assert.equal(errorBody(grandeDemais).details[0].field, 'limit')
+  })
+
+  test('cada pedido vem com os itens e o pagamento', async ({ client, assert }) => {
+    const cliente = await criarUsuario('CLIENTE')
+    const unidade = await criarUnidade()
+    const produto = await ofertar(unidade, '18.50', 5)
+    await new PedidoService().criar(cliente, {
+      unidadeId: unidade.id,
+      canalPedido: 'APP',
+      itens: [{ produtoId: produto.id, quantidade: 2 }],
+    })
+
+    const response = await client.get('/api/v1/pedidos').loginAs(cliente)
+
+    const [pedido] = pedidosListados(response).data
+    assert.lengthOf(pedido.itens, 1)
+    assert.containsSubset(pedido, { pagamento: null, canceladoEm: null })
   })
 })

@@ -1,6 +1,7 @@
 import { DateTime } from 'luxon'
 
 import Estoque from '#models/estoque'
+import Pedido from '#models/pedido'
 import Produto from '#models/produto'
 import Unidade from '#models/unidade'
 import UnidadeProduto from '#models/unidade_produto'
@@ -70,6 +71,22 @@ export async function criarEstoque(unidade: Unidade, produto: Produto, quantidad
     produtoId: produto.id,
     quantidade,
     quantidadeMinima: 2,
+  })
+}
+
+export function criarPedido(unidade: Unidade, cliente: User, atributos: Partial<Pedido> = {}) {
+  const numero = proximo()
+
+  return Pedido.create({
+    codigo: `PED${numero.toString().padStart(12, '0')}`,
+    unidadeId: unidade.id,
+    clienteId: cliente.id,
+    canalPedido: 'APP',
+    status: 'AGUARDANDO_PAGAMENTO',
+    subtotal: '18.50',
+    desconto: '0.00',
+    total: '18.50',
+    ...atributos,
   })
 }
 

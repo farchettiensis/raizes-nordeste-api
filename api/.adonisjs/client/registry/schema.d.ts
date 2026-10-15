@@ -115,6 +115,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/estoques_controller').default['index']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'pedidos.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/pedidos'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: ExtractQueryForGet<InferInput<(typeof import('#validators/pedido').listarPedidosValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/pedidos_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/pedidos_controller').default['index']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'pedidos.store': {
     methods: ["POST"]
     pattern: '/api/v1/pedidos'

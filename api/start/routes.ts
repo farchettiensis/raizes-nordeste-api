@@ -34,6 +34,7 @@ router
 
     router
       .group(() => {
+        router.get('/', [controllers.Pedidos, 'index']).as('index').use(middleware.auth())
         router
           .post('/', [controllers.Pedidos, 'store'])
           .as('store')
