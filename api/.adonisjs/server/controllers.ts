@@ -11,6 +11,7 @@ export const controllers = {
   NewAccount: () => import('#controllers/new_account_controller'),
   PagamentoWebhooks: () => import('#controllers/pagamento_webhooks_controller'),
   Pagamentos: () => import('#controllers/pagamentos_controller'),
+  PedidoStatus: () => import('#controllers/pedido_status_controller'),
   Pedidos: () => import('#controllers/pedidos_controller'),
   Profile: () => import('#controllers/profile_controller'),
   Unidades: () => import('#controllers/unidades_controller'),

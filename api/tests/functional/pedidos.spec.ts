@@ -3,11 +3,13 @@ import testUtils from '@adonisjs/core/services/test_utils'
 
 import Estoque from '#models/estoque'
 import MovimentacaoEstoque from '#models/movimentacao_estoque'
-import Pedido from '#models/pedido'
+import Pagamento from '#models/pagamento'
+import Pedido, { type StatusPedido } from '#models/pedido'
 import PedidoItem from '#models/pedido_item'
 import type Produto from '#models/produto'
 import type Unidade from '#models/unidade'
 import UnidadeProduto from '#models/unidade_produto'
+import User, { PERFIS_DA_UNIDADE, type PerfilUsuario } from '#models/user'
 import PedidoService from '#services/pedido_service'
 import {
   agora,
@@ -18,6 +20,7 @@ import {
   criarUnidade,
   criarUsuario,
 } from '#tests/helpers/fixtures'
+import { comPedidoTravado } from '#tests/helpers/trava'
 
 type ItemDoPedido = {
   produtoId: number
@@ -799,5 +802,242 @@ test.group('Listagem de pedidos', (group) => {
     const [pedido] = pedidosListados(response).data
     assert.lengthOf(pedido.itens, 1)
     assert.containsSubset(pedido, { pagamento: null, canceladoEm: null })
+  })
+})
+
+test.group('Atualizacao de status do pedido', (group) => {
+  group.each.setup(() => testUtils.db().truncate())
+
+  async function pedidoNoStatus(status: StatusPedido) {
+    const unidade = await criarUnidade()
+
+    return criarPedido(unidade, await criarUsuario('CLIENTE'), { status })
+  }
+
+  function equipeDe(pedido: Pedido, perfil: PerfilUsuario) {
+    return criarUsuario(perfil, { unidadeId: pedido.unidadeId })
+  }
+
+  async function statusPersistido(pedido: Pedido) {
+    const recarregado = await Pedido.findOrFail(pedido.id)
+
+    return recarregado.status
+  }
+
+  const AVANCOS: { origem: StatusPedido; destino: StatusPedido; perfis: PerfilUsuario[] }[] = [
+    { origem: 'PAGO', destino: 'EM_PREPARO', perfis: ['COZINHA', 'GERENTE'] },
+    { origem: 'EM_PREPARO', destino: 'PRONTO', perfis: ['COZINHA', 'GERENTE'] },
+    { origem: 'PRONTO', destino: 'ENTREGUE', perfis: ['ATENDENTE', 'GERENTE'] },
+  ]
+
+  test('sem token responde 401', async ({ client }) => {
+    const pedido = await pedidoNoStatus('PAGO')
+
+    const response = await client
+      .patch(`/api/v1/pedidos/${pedido.id}/status`)
+      .json({ status: 'EM_PREPARO' })
+
+    response.assertStatus(401)
+  })
+
+  test('cada avanco e feito pelos perfis permitidos e persiste o status', async ({
+    client,
+    assert,
+  }) => {
+    for (const { origem, destino, perfis } of AVANCOS) {
+      for (const perfil of perfis) {
+        const pedido = await pedidoNoStatus(origem)
+
+        const response = await client
+          .patch(`/api/v1/pedidos/${pedido.id}/status`)
+          .json({ status: destino })
+          .loginAs(await equipeDe(pedido, perfil))
+
+        response.assertStatus(200)
+        assert.equal(pedidoCriado(response).data.status, destino, `${perfil}: ${origem}`)
+        assert.equal(await statusPersistido(pedido), destino)
+      }
+    }
+  })
+
+  test('os demais perfis recebem 403, inclusive o admin e o cliente dono', async ({
+    client,
+    assert,
+  }) => {
+    for (const { origem, destino, perfis } of AVANCOS) {
+      const pedido = await pedidoNoStatus(origem)
+      const dono = await User.findOrFail(pedido.clienteId)
+      const negados = [
+        dono,
+        await criarUsuario('ADMIN'),
+        ...(await Promise.all(
+          PERFIS_DA_UNIDADE.filter((perfil) => !perfis.includes(perfil)).map((perfil) =>
+            equipeDe(pedido, perfil)
+          )
+        )),
+      ]
+
+      for (const usuario of negados) {
+        const response = await client
+          .patch(`/api/v1/pedidos/${pedido.id}/status`)
+          .json({ status: destino })
+          .loginAs(usuario)
+
+        response.assertStatus(403)
+        assert.equal(errorBody(response).error, 'SEM_PERMISSAO', `${usuario.perfil}: ${origem}`)
+      }
+
+      assert.equal(await statusPersistido(pedido), origem)
+    }
+  })
+
+  test('transicao fora do ciclo de vida responde 409 com os destinos possiveis', async ({
+    client,
+    assert,
+  }) => {
+    const pago = await pedidoNoStatus('PAGO')
+
+    const response = await client
+      .patch(`/api/v1/pedidos/${pago.id}/status`)
+      .json({ status: 'PRONTO' })
+      .loginAs(await equipeDe(pago, 'GERENTE'))
+
+    response.assertStatus(409)
+    assert.containsSubset(errorBody(response), {
+      error: 'TRANSICAO_DE_STATUS_INVALIDA',
+      details: [
+        { field: 'status', issue: 'De PAGO o pedido so pode ir para: EM_PREPARO, CANCELADO' },
+      ],
+    })
+    assert.equal(await statusPersistido(pago), 'PAGO')
+  })
+
+  test('pedido entregue nao muda mais, qualquer que seja o perfil', async ({ client, assert }) => {
+    const entregue = await pedidoNoStatus('ENTREGUE')
+
+    for (const perfil of ['ATENDENTE', 'COZINHA'] as const) {
+      const response = await client
+        .patch(`/api/v1/pedidos/${entregue.id}/status`)
+        .json({ status: 'PRONTO' })
+        .loginAs(await equipeDe(entregue, perfil))
+
+      response.assertStatus(409)
+      assert.containsSubset(errorBody(response), {
+        error: 'TRANSICAO_DE_STATUS_INVALIDA',
+        details: [{ field: 'status', issue: 'De ENTREGUE o pedido nao muda mais de status' }],
+      })
+    }
+  })
+
+  test('PAGO e AGUARDANDO_PAGAMENTO nao sao aceitos, so o webhook paga', async ({
+    client,
+    assert,
+  }) => {
+    const pedido = await pedidoNoStatus('AGUARDANDO_PAGAMENTO')
+    const gerente = await equipeDe(pedido, 'GERENTE')
+
+    for (const status of ['PAGO', 'AGUARDANDO_PAGAMENTO', 'INEXISTENTE']) {
+      const response = await client
+        .patch(`/api/v1/pedidos/${pedido.id}/status`)
+        .json({ status } as never)
+        .loginAs(gerente)
+
+      response.assertStatus(422)
+      assert.equal(errorBody(response).details[0].field, 'status', status)
+    }
+  })
+
+  test('pedido de outra unidade responde 403', async ({ client, assert }) => {
+    const pedido = await pedidoNoStatus('PAGO')
+    const outraUnidade = await criarUnidade()
+
+    const response = await client
+      .patch(`/api/v1/pedidos/${pedido.id}/status`)
+      .json({ status: 'EM_PREPARO' })
+      .loginAs(await criarUsuario('COZINHA', { unidadeId: outraUnidade.id }))
+
+    response.assertStatus(403)
+    assert.equal(errorBody(response).error, 'SEM_PERMISSAO')
+    assert.equal(await statusPersistido(pedido), 'PAGO')
+  })
+
+  test('perfil de unidade sem unidade vinculada responde 403', async ({ client, assert }) => {
+    const pedido = await pedidoNoStatus('PAGO')
+
+    const response = await client
+      .patch(`/api/v1/pedidos/${pedido.id}/status`)
+      .json({ status: 'EM_PREPARO' })
+      .loginAs(await criarUsuario('COZINHA'))
+
+    response.assertStatus(403)
+    assert.equal(errorBody(response).error, 'SEM_UNIDADE_VINCULADA')
+  })
+
+  test('pedido inexistente responde 404', async ({ client, assert }) => {
+    const response = await client
+      .patch('/api/v1/pedidos/999999/status')
+      .json({ status: 'EM_PREPARO' })
+      .loginAs(await criarUsuario('ADMIN'))
+
+    response.assertStatus(404)
+    assert.equal(errorBody(response).error, 'PEDIDO_NAO_ENCONTRADO')
+  })
+
+  test('devolve o pedido completo, com itens e pagamento', async ({ client, assert }) => {
+    const unidade = await criarUnidade()
+    const produto = await ofertar(unidade, '18.50', 5)
+    const pedido = await new PedidoService().criar(await criarUsuario('CLIENTE'), {
+      unidadeId: unidade.id,
+      canalPedido: 'BALCAO',
+      itens: [{ produtoId: produto.id, quantidade: 1 }],
+    })
+    await Pagamento.create({
+      pedidoId: pedido.id,
+      metodo: 'PIX',
+      valor: pedido.total,
+      status: 'APROVADO',
+    })
+    pedido.status = 'PAGO'
+    await pedido.save()
+
+    const response = await client
+      .patch(`/api/v1/pedidos/${pedido.id}/status`)
+      .json({ status: 'EM_PREPARO' })
+      .loginAs(await equipeDe(pedido, 'COZINHA'))
+
+    response.assertStatus(200)
+    const { data } = pedidoCriado(response)
+    assert.containsSubset(data, {
+      pedidoId: pedido.id,
+      codigo: pedido.codigo,
+      status: 'EM_PREPARO',
+      pagamento: { status: 'APROVADO' },
+    })
+    assert.lengthOf(data.itens, 1)
+  })
+
+  test('duas transicoes simultaneas: uma e aplicada e a outra recebe 409', async ({
+    client,
+    assert,
+  }) => {
+    const pedido = await pedidoNoStatus('PAGO')
+    const cozinha = await equipeDe(pedido, 'COZINHA')
+    const iniciarPreparo = () =>
+      client
+        .patch(`/api/v1/pedidos/${pedido.id}/status`)
+        .json({ status: 'EM_PREPARO' })
+        .loginAs(cozinha)
+
+    const respostas = await comPedidoTravado(
+      pedido,
+      () => Promise.all([iniciarPreparo(), iniciarPreparo()]),
+      async () => assert.equal(await statusPersistido(pedido), 'PAGO')
+    )
+
+    assert.sameMembers(
+      respostas.map((response) => response.status()),
+      [200, 409]
+    )
+    assert.equal(await statusPersistido(pedido), 'EM_PREPARO')
   })
 })

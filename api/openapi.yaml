@@ -412,6 +412,62 @@ paths:
         '404':
           $ref: '#/components/responses/PedidoNaoEncontrado'
 
+  /api/v1/pedidos/{id}/status:
+    patch:
+      tags: [Pedidos]
+      summary: Avanca o pedido no ciclo de vida da cozinha ao balcao
+      description: |
+        Leva o pedido ao proximo status. Cada transicao tem os perfis que
+        podem faze-la:
+
+        | Transicao | Perfis |
+        |---|---|
+        | PAGO para EM_PREPARO | COZINHA, GERENTE |
+        | EM_PREPARO para PRONTO | COZINHA, GERENTE |
+        | PRONTO para ENTREGUE | ATENDENTE, GERENTE |
+
+        ATENDENTE, COZINHA e GERENTE so agem sobre pedidos da propria
+        unidade. ADMIN nao faz transicoes de avanco, porque a matriz nao
+        opera a cozinha nem o balcao. PAGO nao e aceito: so o webhook do
+        provedor marca o pedido como pago.
+
+        As checagens rodam com o pedido travado, nesta ordem: existencia
+        (404), escopo (403), transicao prevista no ciclo de vida (409, com os
+        destinos possiveis a partir do status atual) e perfil (403). Duas
+        transicoes simultaneas do mesmo pedido nunca sao aplicadas juntas: a
+        segunda espera a primeira e recebe 409. Nao ha volta de status.
+      parameters:
+        - $ref: '#/components/parameters/PedidoId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AtualizacaoDeStatus'
+            example:
+              status: EM_PREPARO
+      responses:
+        '200':
+          description: Status atualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Pedido'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissaoNaTransicao'
+        '404':
+          $ref: '#/components/responses/PedidoNaoEncontrado'
+        '409':
+          $ref: '#/components/responses/TransicaoDeStatusInvalida'
+        '422':
+          $ref: '#/components/responses/DadosInvalidos'
+
   /api/v1/pedidos/{id}/pagamento:
     post:
       tags: [Pagamentos]
@@ -806,6 +862,15 @@ components:
           type: string
           format: date-time
           example: '2026-02-05T12:00:00.000Z'
+
+    AtualizacaoDeStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [EM_PREPARO, PRONTO, ENTREGUE]
+          description: Status de destino
 
     NovoPagamento:
       type: object
@@ -1236,6 +1301,68 @@ components:
                 timestamp: '2026-02-05T12:00:00.000Z'
                 path: /api/v1/pedidos/9001
                 requestId: 9d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a
+
+    SemPermissaoNaTransicao:
+      description: Perfil que nao faz a transicao, pedido fora do escopo ou perfil de unidade sem unidade vinculada
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          examples:
+            perfil:
+              value:
+                error: SEM_PERMISSAO
+                message: Seu perfil nao pode levar o pedido a este status.
+                details:
+                  - field: status
+                    issue: PAGO para EM_PREPARO
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/pedidos/9001/status
+                requestId: 1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d
+            escopo:
+              value:
+                error: SEM_PERMISSAO
+                message: Voce nao tem acesso a este pedido.
+                details: []
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/pedidos/9001/status
+                requestId: 2b3c4d5e-6f7a-4b8c-9d0e-1f2a3b4c5d6e
+            semUnidade:
+              value:
+                error: SEM_UNIDADE_VINCULADA
+                message: Seu usuario nao esta vinculado a nenhuma unidade.
+                details: []
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/pedidos/9001/status
+                requestId: 3c4d5e6f-7a8b-4c9d-8e1f-2a3b4c5d6e7f
+
+    TransicaoDeStatusInvalida:
+      description: Transicao fora do ciclo de vida do pedido, com os destinos possiveis
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          examples:
+            foraDoCiclo:
+              value:
+                error: TRANSICAO_DE_STATUS_INVALIDA
+                message: O pedido nao pode ir do status atual para o solicitado.
+                details:
+                  - field: status
+                    issue: 'De PAGO o pedido so pode ir para: EM_PREPARO, CANCELADO'
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/pedidos/9001/status
+                requestId: 4d5e6f7a-8b9c-4d0e-9f2a-3b4c5d6e7f8a
+            finalizado:
+              value:
+                error: TRANSICAO_DE_STATUS_INVALIDA
+                message: O pedido nao pode ir do status atual para o solicitado.
+                details:
+                  - field: status
+                    issue: De ENTREGUE o pedido nao muda mais de status
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/pedidos/9001/status
+                requestId: 5e6f7a8b-9c0d-4e1f-8a3b-4c5d6e7f8a9b
 
     PedidoNaoEncontrado:
       description: O pedido informado nao existe

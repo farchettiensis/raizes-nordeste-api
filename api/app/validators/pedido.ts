@@ -1,6 +1,6 @@
 import vine from '@vinejs/vine'
 
-import { CANAIS_PEDIDO, STATUS_PEDIDO } from '#models/pedido'
+import { CANAIS_PEDIDO, STATUS_DEFINIDOS_PELA_OPERACAO, STATUS_PEDIDO } from '#models/pedido'
 import { paginacao } from '#validators/paginacao'
 
 const identificador = () => vine.number().withoutDecimals().positive()
@@ -25,4 +25,8 @@ export const listarPedidosValidator = vine.create({
   canalPedido: vine.enum(CANAIS_PEDIDO).optional(),
   status: vine.enum(STATUS_PEDIDO).optional(),
   unidadeId: identificador().optional(),
+})
+
+export const atualizarStatusValidator = vine.create({
+  status: vine.enum(STATUS_DEFINIDOS_PELA_OPERACAO),
 })

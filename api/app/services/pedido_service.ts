@@ -6,7 +6,11 @@ import { DateTime } from 'luxon'
 import ApiException, { type ErrorDetail } from '#exceptions/api_exception'
 import Estoque from '#models/estoque'
 import MovimentacaoEstoque from '#models/movimentacao_estoque'
-import Pedido, { type CanalPedido, type StatusPedido } from '#models/pedido'
+import Pedido, {
+  TRANSICOES_STATUS_PEDIDO,
+  type CanalPedido,
+  type StatusPedido,
+} from '#models/pedido'
 import Unidade from '#models/unidade'
 import UnidadeProduto from '#models/unidade_produto'
 import type User from '#models/user'
@@ -72,6 +76,57 @@ export default class PedidoService {
       .first()
 
     return garantirPedidoVisivel(pedido, usuario, pedidoId)
+  }
+
+  async atualizarStatus(usuario: User, pedidoId: number, destino: StatusPedido) {
+    const pedido = await db.transaction(async (trx) => {
+      const travado = await Pedido.query({ client: trx }).where('id', pedidoId).forUpdate().first()
+      const visivel = garantirPedidoVisivel(travado, usuario, pedidoId)
+
+      this.exigirTransicaoPermitida(visivel, destino)
+      this.exigirPerfilAutorizado(visivel, usuario, destino)
+
+      visivel.status = destino
+      await visivel.save()
+
+      return visivel
+    })
+
+    await pedido.load('itens', (itens) => itens.orderBy('id'))
+    await pedido.load('pagamento')
+
+    return pedido
+  }
+
+  private exigirTransicaoPermitida(pedido: Pedido, destino: StatusPedido) {
+    if (pedido.podeTransicionarPara(destino)) {
+      return
+    }
+
+    const destinos = TRANSICOES_STATUS_PEDIDO[pedido.status]
+
+    throw new ApiException('O pedido nao pode ir do status atual para o solicitado.', {
+      code: 'TRANSICAO_DE_STATUS_INVALIDA',
+      status: 409,
+      details: [
+        {
+          field: 'status',
+          issue: pedido.finalizado
+            ? `De ${pedido.status} o pedido nao muda mais de status`
+            : `De ${pedido.status} o pedido so pode ir para: ${destinos.join(', ')}`,
+        },
+      ],
+    })
+  }
+
+  private exigirPerfilAutorizado(pedido: Pedido, usuario: User, destino: StatusPedido) {
+    if (!pedido.podeSerTransicionadoPor(usuario, destino)) {
+      throw new ApiException('Seu perfil nao pode levar o pedido a este status.', {
+        code: 'SEM_PERMISSAO',
+        status: 403,
+        details: [{ field: 'status', issue: `${pedido.status} para ${destino}` }],
+      })
+    }
   }
 
   async criar(cliente: User, dados: NovoPedido) {

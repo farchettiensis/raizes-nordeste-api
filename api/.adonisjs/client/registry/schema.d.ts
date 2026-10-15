@@ -151,6 +151,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/pedidos_controller').default['show']>>>
     }
   }
+  'pedidos.status.update': {
+    methods: ["PATCH"]
+    pattern: '/api/v1/pedidos/:id/status'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/pedido').atualizarStatusValidator)>>
+      paramsTuple: [ParamValue]
+      params: { id: ParamValue }
+      query: ExtractQuery<InferInput<(typeof import('#validators/pedido').atualizarStatusValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/pedido_status_controller').default['update']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/pedido_status_controller').default['update']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'pedidos.pagamento.store': {
     methods: ["POST"]
     pattern: '/api/v1/pedidos/:id/pagamento'

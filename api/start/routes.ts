@@ -45,6 +45,11 @@ router
           .as('show')
           .use(middleware.auth())
         router
+          .patch(':id/status', [controllers.PedidoStatus, 'update'])
+          .where('id', router.matchers.number())
+          .as('status.update')
+          .use(middleware.auth())
+        router
           .post(':id/pagamento', [controllers.Pagamentos, 'store'])
           .where('id', router.matchers.number())
           .as('pagamento.store')

@@ -78,6 +78,12 @@ const routes = {
     tokens: [{"old":"/api/v1/pedidos/:id","type":0,"val":"api","end":""},{"old":"/api/v1/pedidos/:id","type":0,"val":"v1","end":""},{"old":"/api/v1/pedidos/:id","type":0,"val":"pedidos","end":""},{"old":"/api/v1/pedidos/:id","type":1,"val":"id","end":""}],
     types: placeholder as Registry['pedidos.show']['types'],
   },
+  'pedidos.status.update': {
+    methods: ["PATCH"],
+    pattern: '/api/v1/pedidos/:id/status',
+    tokens: [{"old":"/api/v1/pedidos/:id/status","type":0,"val":"api","end":""},{"old":"/api/v1/pedidos/:id/status","type":0,"val":"v1","end":""},{"old":"/api/v1/pedidos/:id/status","type":0,"val":"pedidos","end":""},{"old":"/api/v1/pedidos/:id/status","type":1,"val":"id","end":""},{"old":"/api/v1/pedidos/:id/status","type":0,"val":"status","end":""}],
+    types: placeholder as Registry['pedidos.status.update']['types'],
+  },
   'pedidos.pagamento.store': {
     methods: ["POST"],
     pattern: '/api/v1/pedidos/:id/pagamento',

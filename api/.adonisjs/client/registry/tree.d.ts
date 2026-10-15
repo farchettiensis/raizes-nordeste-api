@@ -31,6 +31,9 @@ export interface ApiDefinition {
     index: typeof routes['pedidos.index']
     store: typeof routes['pedidos.store']
     show: typeof routes['pedidos.show']
+    status: {
+      update: typeof routes['pedidos.status.update']
+    }
     pagamento: {
       store: typeof routes['pedidos.pagamento.store']
     }

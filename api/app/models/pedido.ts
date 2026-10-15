@@ -30,6 +30,12 @@ export const TRANSICOES_STATUS_PEDIDO: Record<StatusPedido, StatusPedido[]> = {
   CANCELADO: [],
 }
 
+export const STATUS_DEFINIDOS_PELA_OPERACAO = [
+  'EM_PREPARO',
+  'PRONTO',
+  'ENTREGUE',
+] as const satisfies readonly StatusPedido[]
+
 const CANCELAM_DEPOIS_DE_PAGO: PerfilUsuario[] = ['GERENTE', 'ADMIN']
 
 export const PERFIS_POR_TRANSICAO: Record<

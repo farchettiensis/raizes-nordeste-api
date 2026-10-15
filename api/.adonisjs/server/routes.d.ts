@@ -16,6 +16,7 @@ export type ScannedRoutes = {
     'pedidos.index': { paramsTuple?: []; params?: {} }
     'pedidos.store': { paramsTuple?: []; params?: {} }
     'pedidos.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'pedidos.status.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pedidos.pagamento.store': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pagamentos.webhook': { paramsTuple?: []; params?: {} }
     'profile.profile.show': { paramsTuple?: []; params?: {} }
@@ -52,6 +53,9 @@ export type ScannedRoutes = {
     'pedidos.pagamento.store': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pagamentos.webhook': { paramsTuple?: []; params?: {} }
     'profile.access_tokens.destroy': { paramsTuple?: []; params?: {} }
+  }
+  PATCH: {
+    'pedidos.status.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
   }
 }
 declare module '@adonisjs/core/types/http' {
