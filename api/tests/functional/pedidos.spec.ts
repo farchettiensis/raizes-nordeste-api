@@ -504,7 +504,41 @@ test.group('Consulta de pedido', (group) => {
     response.assertStatus(401)
   })
 
-  test('um perfil da operacao nao consulta por esta rota', async ({ client }) => {
+  test('a equipe da unidade consulta o pedido', async ({ client }) => {
+    const pedido = await pedidoDe(await criarUsuario('CLIENTE'))
+
+    for (const perfil of ['ATENDENTE', 'COZINHA', 'GERENTE'] as const) {
+      const equipe = await criarUsuario(perfil, { unidadeId: pedido.unidadeId })
+
+      const response = await client.get(`/api/v1/pedidos/${pedido.id}`).loginAs(equipe)
+
+      response.assertStatus(200)
+    }
+  })
+
+  test('a equipe de outra unidade nao consulta o pedido', async ({ client, assert }) => {
+    const pedido = await pedidoDe(await criarUsuario('CLIENTE'))
+    const outraUnidade = await criarUnidade()
+
+    const response = await client
+      .get(`/api/v1/pedidos/${pedido.id}`)
+      .loginAs(await criarUsuario('GERENTE', { unidadeId: outraUnidade.id }))
+
+    response.assertStatus(403)
+    assert.equal(errorBody(response).error, 'SEM_PERMISSAO')
+  })
+
+  test('o admin consulta o pedido de qualquer unidade', async ({ client }) => {
+    const pedido = await pedidoDe(await criarUsuario('CLIENTE'))
+
+    const response = await client
+      .get(`/api/v1/pedidos/${pedido.id}`)
+      .loginAs(await criarUsuario('ADMIN'))
+
+    response.assertStatus(200)
+  })
+
+  test('perfil de unidade sem unidade vinculada responde 403', async ({ client, assert }) => {
     const pedido = await pedidoDe(await criarUsuario('CLIENTE'))
 
     const response = await client
@@ -512,6 +546,7 @@ test.group('Consulta de pedido', (group) => {
       .loginAs(await criarUsuario('ATENDENTE'))
 
     response.assertStatus(403)
+    assert.equal(errorBody(response).error, 'SEM_UNIDADE_VINCULADA')
   })
 
   test('o cliente nao consulta o pedido de outro cliente', async ({ client, assert }) => {
@@ -522,7 +557,7 @@ test.group('Consulta de pedido', (group) => {
       .loginAs(await criarUsuario('CLIENTE'))
 
     response.assertStatus(403)
-    assert.equal(errorBody(response).message, 'Este pedido pertence a outro cliente.')
+    assert.equal(errorBody(response).error, 'SEM_PERMISSAO')
   })
 
   test('pedido inexistente responde 404', async ({ client, assert }) => {

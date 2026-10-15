@@ -140,7 +140,7 @@ test.group('Solicitacao de pagamento', (group) => {
       .loginAs(outro)
 
     response.assertStatus(403)
-    assert.equal(errorBody(response).message, 'Este pedido pertence a outro cliente.')
+    assert.equal(errorBody(response).error, 'SEM_PERMISSAO')
     assert.lengthOf(gateway.chamadas, 0)
     assert.isNull(await Pagamento.findBy('pedidoId', pedido.id))
   })

@@ -14,7 +14,7 @@ import PedidoItem from '#models/pedido_item'
 import type User from '#models/user'
 import { emCentavos } from '#services/centavos'
 import { GatewayPagamento } from '#services/gateway_pagamento'
-import { garantirPedidoDoCliente } from '#services/pedido_service'
+import { garantirPedidoVisivel } from '#services/escopo_de_acesso'
 import type { eventoDePagamentoValidator } from '#validators/pagamento'
 
 export type EventoDePagamento = Infer<typeof eventoDePagamentoValidator>
@@ -47,7 +47,7 @@ export default class PagamentoService {
   private async travarPedido(cliente: User, pedidoId: number, trx: TransactionClientContract) {
     const pedido = await Pedido.query({ client: trx }).where('id', pedidoId).forUpdate().first()
 
-    return garantirPedidoDoCliente(pedido, cliente, pedidoId)
+    return garantirPedidoVisivel(pedido, cliente, pedidoId)
   }
 
   private exigirAguardandoPagamento(pedido: Pedido) {

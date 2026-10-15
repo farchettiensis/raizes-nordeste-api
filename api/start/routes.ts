@@ -34,19 +34,23 @@ router
 
     router
       .group(() => {
-        router.post('/', [controllers.Pedidos, 'store']).as('store')
+        router
+          .post('/', [controllers.Pedidos, 'store'])
+          .as('store')
+          .use(middleware.perfil({ perfis: ['CLIENTE'] }))
         router
           .get(':id', [controllers.Pedidos, 'show'])
           .where('id', router.matchers.number())
           .as('show')
+          .use(middleware.auth())
         router
           .post(':id/pagamento', [controllers.Pagamentos, 'store'])
           .where('id', router.matchers.number())
           .as('pagamento.store')
+          .use(middleware.perfil({ perfis: ['CLIENTE'] }))
       })
       .prefix('pedidos')
       .as('pedidos')
-      .use(middleware.perfil({ perfis: ['CLIENTE'] }))
 
     router
       .post('pagamentos/webhook', [controllers.PagamentoWebhooks, 'store'])

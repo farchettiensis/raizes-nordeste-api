@@ -45,6 +45,14 @@ export default class User extends compose(UserSchema, withAuthFinder(hash)) {
     return PERFIS_DA_UNIDADE.includes(this.perfil)
   }
 
+  get semUnidadeVinculada() {
+    return this.vinculadoAUnidade && this.unidadeId === null
+  }
+
+  operaUnidade(unidadeId: number) {
+    return this.temPerfil('ADMIN') || (this.vinculadoAUnidade && this.unidadeId === unidadeId)
+  }
+
   get consentiuFidelidade() {
     return this.consentimentoFidelidadeEm !== null
   }

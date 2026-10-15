@@ -11,6 +11,7 @@ import Unidade from '#models/unidade'
 import UnidadeProduto from '#models/unidade_produto'
 import type User from '#models/user'
 import { emCentavos, emReais } from '#services/centavos'
+import { garantirPedidoVisivel } from '#services/escopo_de_acesso'
 
 export type ItemSolicitado = {
   produtoId: number
@@ -24,25 +25,6 @@ export type NovoPedido = {
   observacoes?: string
 }
 
-export function garantirPedidoDoCliente(pedido: Pedido | null, cliente: User, pedidoId: number) {
-  if (!pedido) {
-    throw new ApiException('O pedido informado nao existe.', {
-      code: 'PEDIDO_NAO_ENCONTRADO',
-      status: 404,
-      details: [{ field: 'id', issue: `Pedido ${pedidoId} nao encontrado` }],
-    })
-  }
-
-  if (!pedido.pertenceA(cliente)) {
-    throw new ApiException('Este pedido pertence a outro cliente.', {
-      code: 'SEM_PERMISSAO',
-      status: 403,
-    })
-  }
-
-  return pedido
-}
-
 function gerarCodigo() {
   const data = DateTime.now().toFormat('yyMMdd')
   const sufixo = randomBytes(4).toString('hex').toUpperCase()
@@ -51,14 +33,14 @@ function gerarCodigo() {
 }
 
 export default class PedidoService {
-  async doCliente(cliente: User, pedidoId: number) {
+  async visivelPara(usuario: User, pedidoId: number) {
     const pedido = await Pedido.query()
       .where('id', pedidoId)
       .preload('itens', (itens) => itens.orderBy('id'))
       .preload('pagamento')
       .first()
 
-    return garantirPedidoDoCliente(pedido, cliente, pedidoId)
+    return garantirPedidoVisivel(pedido, usuario, pedidoId)
   }
 
   async criar(cliente: User, dados: NovoPedido) {

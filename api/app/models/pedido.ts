@@ -1,4 +1,4 @@
-import { belongsTo, hasMany, hasOne } from '@adonisjs/lucid/orm'
+import { belongsTo, hasMany, hasOne, scope } from '@adonisjs/lucid/orm'
 import type { BelongsTo, HasMany, HasOne } from '@adonisjs/lucid/types/relations'
 import { PedidoSchema } from '#database/schema'
 import Pagamento from '#models/pagamento'
@@ -45,12 +45,26 @@ export default class Pedido extends PedidoSchema {
   @hasOne(() => Pagamento)
   declare pagamento: HasOne<typeof Pagamento>
 
+  static visiveisPara = scope((query, usuario: User) => {
+    if (usuario.temPerfil('CLIENTE')) {
+      query.where('clienteId', usuario.id)
+    } else if (usuario.vinculadoAUnidade) {
+      query.where('unidadeId', usuario.unidadeId!)
+    }
+  })
+
   get finalizado() {
     return TRANSICOES_STATUS_PEDIDO[this.status].length === 0
   }
 
   pertenceA(usuario: User) {
     return this.clienteId === usuario.id
+  }
+
+  visivelPara(usuario: User) {
+    return usuario.temPerfil('CLIENTE')
+      ? this.pertenceA(usuario)
+      : usuario.operaUnidade(this.unidadeId)
   }
 
   podeTransicionarPara(destino: StatusPedido) {

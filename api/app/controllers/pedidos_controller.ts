@@ -19,7 +19,7 @@ export default class PedidosController {
   }
 
   async show({ auth, params, serialize }: HttpContext) {
-    const pedido = await this.pedidos.doCliente(auth.getUserOrFail(), params.id)
+    const pedido = await this.pedidos.visivelPara(auth.getUserOrFail(), params.id)
 
     return serialize(PedidoTransformer.transform(pedido))
   }
