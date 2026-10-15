@@ -234,6 +234,10 @@ paths:
         Endpoint restrito a equipe da operacao: ATENDENTE, COZINHA, GERENTE e
         ADMIN. Um CLIENTE autenticado recebe 403, porque a disponibilidade que
         interessa a ele ja aparece no cardapio publico da unidade.
+
+        ATENDENTE, COZINHA e GERENTE so consultam a unidade a que estao
+        vinculados (outra unidade e 403 SEM_PERMISSAO; sem unidade vinculada,
+        403 SEM_UNIDADE_VINCULADA). ADMIN consulta qualquer unidade.
       parameters:
         - $ref: '#/components/parameters/UnidadeId'
         - $ref: '#/components/parameters/Page'

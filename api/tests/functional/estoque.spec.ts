@@ -165,6 +165,27 @@ test.group('Estoque por unidade', (group) => {
     assert.equal(estoques(response).data[0].quantidade, 3)
   })
 
+  test('a equipe de outra unidade nao consulta o estoque', async ({ client, assert }) => {
+    const unidade = await criarUnidade()
+    const outra = await criarUnidade()
+    const gerente = await criarUsuario('GERENTE', { unidadeId: outra.id })
+
+    const response = await client.get(`/api/v1/unidades/${unidade.id}/estoque`).loginAs(gerente)
+
+    response.assertStatus(403)
+    assert.equal(errorBody(response).error, 'SEM_PERMISSAO')
+  })
+
+  test('perfil de unidade sem unidade vinculada responde 403', async ({ client, assert }) => {
+    const unidade = await criarUnidade()
+    const atendente = await criarUsuario('ATENDENTE')
+
+    const response = await client.get(`/api/v1/unidades/${unidade.id}/estoque`).loginAs(atendente)
+
+    response.assertStatus(403)
+    assert.equal(errorBody(response).error, 'SEM_UNIDADE_VINCULADA')
+  })
+
   test('o estoque de uma unidade inexistente responde 404', async ({ client, assert }) => {
     const gerente = await criarUsuario('GERENTE')
 

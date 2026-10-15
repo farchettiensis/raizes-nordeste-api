@@ -139,7 +139,7 @@ O Swagger em `/docs` traz os exemplos de request e response de cada um. Esta tab
 | GET | `/api/v1/unidades` | pública | Lista unidades, com filtros e paginação |
 | GET | `/api/v1/unidades/:id` | pública | Detalhe de uma unidade |
 | GET | `/api/v1/unidades/:id/cardapio` | pública | Cardápio da unidade, com preço e disponibilidade |
-| GET | `/api/v1/unidades/:id/estoque` | token, perfis da operação | Saldo de estoque da unidade, produto a produto |
+| GET | `/api/v1/unidades/:id/estoque` | token, perfis da operação, própria unidade | Saldo de estoque da unidade, produto a produto |
 | POST | `/api/v1/pedidos` | token, perfil CLIENTE | Cria o pedido validando cardápio e estoque da unidade |
 | GET | `/api/v1/pedidos/:id` | token, pedido no escopo do usuário | Pedido com itens e pagamento |
 | POST | `/api/v1/pedidos/:id/pagamento` | token, perfil CLIENTE, dono do pedido | Solicita o pagamento ao provedor externo |
@@ -173,7 +173,7 @@ Nas rotas de um pedido existente, além do perfil, a API confere o escopo do usu
 
 Fora do escopo, a resposta é `403 SEM_PERMISSAO`. Um perfil de unidade sem unidade vinculada recebe `403 SEM_UNIDADE_VINCULADA`: é um erro de cadastro, não uma lista vazia. A ordem é perfil, existência (`404`) e escopo (`403`). `GET /pedidos/:id` aceita qualquer perfil autenticado; `POST /pedidos/:id/pagamento` continua exclusivo do CLIENTE, então ali o escopo se reduz ao dono do pedido.
 
-No estoque, a autorização ainda é só por perfil: hoje um gerente consegue consultar o estoque de qualquer unidade, não só da sua. Restringir o acesso à unidade do próprio vínculo (`users.unidade_id`) é o passo seguinte, e não está implementado.
+No estoque vale o mesmo vínculo: ATENDENTE, COZINHA e GERENTE consultam só a unidade em `users.unidade_id` (outra unidade é `403 SEM_PERMISSAO`, sem vínculo é `403 SEM_UNIDADE_VINCULADA`), e ADMIN consulta qualquer uma. A existência da unidade é conferida antes (`404`).
 
 ## Criação de pedido
 

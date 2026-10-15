@@ -2,6 +2,7 @@ import type { HttpContext } from '@adonisjs/core/http'
 
 import Estoque from '#models/estoque'
 import Unidade from '#models/unidade'
+import { garantirAcessoAUnidade } from '#services/escopo_de_acesso'
 import SaldoEstoqueTransformer from '#transformers/saldo_estoque_transformer'
 import { listarEstoqueValidator } from '#validators/unidade'
 
@@ -9,9 +10,10 @@ const PAGINA_PADRAO = 1
 const LIMITE_PADRAO = 10
 
 export default class EstoquesController {
-  async index({ params, request, serialize }: HttpContext) {
+  async index({ auth, params, request, serialize }: HttpContext) {
     const filtros = await listarEstoqueValidator.validate(request.qs())
     const unidade = await Unidade.findOrFail(params.id)
+    garantirAcessoAUnidade(auth.getUserOrFail(), unidade.id)
 
     const saldos = await Estoque.query()
       .select('estoques.*')
