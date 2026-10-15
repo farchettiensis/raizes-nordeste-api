@@ -1,15 +1,13 @@
-import { setTimeout as esperar } from 'node:timers/promises'
 import type { ApiClient } from '@japa/api-client'
 import { test } from '@japa/runner'
 import app from '@adonisjs/core/services/app'
 import testUtils from '@adonisjs/core/services/test_utils'
-import db from '@adonisjs/lucid/services/db'
 
 import pagamentoConfig from '#config/pagamento'
 import Estoque from '#models/estoque'
 import MovimentacaoEstoque from '#models/movimentacao_estoque'
 import Pagamento from '#models/pagamento'
-import Pedido from '#models/pedido'
+import type Pedido from '#models/pedido'
 import type Produto from '#models/produto'
 import type Unidade from '#models/unidade'
 import type User from '#models/user'
@@ -19,6 +17,7 @@ import { GatewayPagamento } from '#services/gateway_pagamento'
 import PagamentoService from '#services/pagamento_service'
 import PedidoService from '#services/pedido_service'
 import GatewayFalso from '#tests/helpers/gateway_falso'
+import { comPedidoTravado } from '#tests/helpers/trava'
 import {
   criarCardapio,
   criarEstoque,
@@ -67,28 +66,6 @@ async function pedidoDe(cliente: User, unidade?: Unidade): Promise<Pedido> {
     canalPedido: 'APP',
     itens: [{ produtoId: produto.id, quantidade: 2 }],
   })
-}
-
-async function comPedidoTravado<T>(
-  pedido: Pedido,
-  disparar: () => Promise<T>,
-  enquantoTravado: () => Promise<void>
-) {
-  const trava = await db.transaction()
-
-  try {
-    await Pedido.query({ client: trava }).where('id', pedido.id).forUpdate().firstOrFail()
-    const emAndamento = disparar()
-    await esperar(300)
-    await enquantoTravado()
-    await trava.commit()
-
-    return await emAndamento
-  } finally {
-    if (!trava.isCompleted) {
-      await trava.rollback()
-    }
-  }
 }
 
 const gateway = new GatewayFalso()
