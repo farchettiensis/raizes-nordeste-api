@@ -46,10 +46,16 @@ export default class Pedido extends PedidoSchema {
   declare pagamento: HasOne<typeof Pagamento>
 
   static visiveisPara = scope((query, usuario: User) => {
+    if (usuario.temPerfil('ADMIN')) {
+      return
+    }
+
     if (usuario.temPerfil('CLIENTE')) {
       query.where('clienteId', usuario.id)
-    } else if (usuario.vinculadoAUnidade) {
-      query.where('unidadeId', usuario.unidadeId!)
+    } else if (usuario.vinculadoAUnidade && usuario.unidadeId !== null) {
+      query.where('unidadeId', usuario.unidadeId)
+    } else {
+      query.whereRaw('false')
     }
   })
 

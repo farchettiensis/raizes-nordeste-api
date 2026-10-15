@@ -686,6 +686,19 @@ test.group('Listagem de pedidos', (group) => {
     assert.equal(errorBody(alheia).error, 'SEM_PERMISSAO')
   })
 
+  test('um perfil sem regra de escopo nao enxerga pedido algum', async ({ client, assert }) => {
+    const unidade = await criarUnidade()
+    const pedido = await criarPedido(unidade, await criarUsuario('CLIENTE'))
+    const semRegra = await criarUsuario('FINANCEIRO' as never, { unidadeId: unidade.id })
+
+    const listagem = await client.get('/api/v1/pedidos').loginAs(semRegra)
+    const consulta = await client.get(`/api/v1/pedidos/${pedido.id}`).loginAs(semRegra)
+
+    listagem.assertStatus(200)
+    assert.isEmpty(pedidosListados(listagem).data)
+    consulta.assertStatus(403)
+  })
+
   test('perfil de unidade sem unidade vinculada responde 403', async ({ client, assert }) => {
     const response = await client.get('/api/v1/pedidos').loginAs(await criarUsuario('COZINHA'))
 
