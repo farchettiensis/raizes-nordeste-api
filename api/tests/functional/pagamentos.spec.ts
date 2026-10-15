@@ -699,6 +699,8 @@ test.group('Webhook de pagamento', (group) => {
         pagamento: { status: 'RECUSADO', motivoRecusa: MOTIVO, metodo: 'PIX' },
       },
     })
+    assert.isNull((antes.body() as { data: { canceladoEm: string | null } }).data.canceladoEm)
+    assert.isString((depois.body() as { data: { canceladoEm: string | null } }).data.canceladoEm)
   })
 
   test('entregas simultaneas esperam a trava e devolvem o estoque uma unica vez', async ({

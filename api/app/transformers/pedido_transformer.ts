@@ -4,8 +4,18 @@ import { BaseTransformer } from '@adonisjs/core/transformers'
 
 export default class PedidoTransformer extends BaseTransformer<Pedido> {
   toObject() {
-    const { id, codigo, unidadeId, canalPedido, status, subtotal, desconto, total, createdAt } =
-      this.resource
+    const {
+      id,
+      codigo,
+      unidadeId,
+      canalPedido,
+      status,
+      subtotal,
+      desconto,
+      total,
+      canceladoEm,
+      createdAt,
+    } = this.resource
 
     return {
       pedidoId: id,
@@ -24,6 +34,7 @@ export default class PedidoTransformer extends BaseTransformer<Pedido> {
         subtotal: item.subtotal,
       })),
       pagamento: PagamentoTransformer.transform(this.whenLoaded(this.resource.pagamento)),
+      canceladoEm: canceladoEm?.toISO() ?? null,
       createdAt: createdAt.toISO(),
     }
   }

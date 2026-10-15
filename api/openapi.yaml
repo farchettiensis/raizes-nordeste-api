@@ -703,6 +703,7 @@ components:
           desconto,
           total,
           itens,
+          canceladoEm,
           createdAt,
         ]
       properties:
@@ -741,6 +742,12 @@ components:
           nullable: true
           allOf:
             - $ref: '#/components/schemas/Pagamento'
+        canceladoEm:
+          type: string
+          format: date-time
+          nullable: true
+          description: Quando o pedido foi cancelado; nulo enquanto nao for
+          example: null
         createdAt:
           type: string
           format: date-time

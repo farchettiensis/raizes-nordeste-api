@@ -584,6 +584,7 @@ test.group('Consulta de pedido', (group) => {
       status: 'AGUARDANDO_PAGAMENTO',
       total: '37.00',
       pagamento: null,
+      canceladoEm: null,
     })
     assert.lengthOf(data.itens, 1)
   })
