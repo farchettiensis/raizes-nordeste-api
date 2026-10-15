@@ -2,10 +2,8 @@ import type { HttpContext } from '@adonisjs/core/http'
 
 import Unidade from '#models/unidade'
 import UnidadeTransformer from '#transformers/unidade_transformer'
+import { LIMITE_PADRAO, PAGINA_PADRAO } from '#validators/paginacao'
 import { listarUnidadesValidator } from '#validators/unidade'
-
-const PAGINA_PADRAO = 1
-const LIMITE_PADRAO = 10
 
 export default class UnidadesController {
   async index({ request, serialize }: HttpContext) {

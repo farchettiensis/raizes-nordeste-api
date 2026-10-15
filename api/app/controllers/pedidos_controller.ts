@@ -3,10 +3,8 @@ import type { HttpContext } from '@adonisjs/core/http'
 
 import PedidoService from '#services/pedido_service'
 import PedidoTransformer from '#transformers/pedido_transformer'
+import { LIMITE_PADRAO, PAGINA_PADRAO } from '#validators/paginacao'
 import { criarPedidoValidator, listarPedidosValidator } from '#validators/pedido'
-
-const PAGINA_PADRAO = 1
-const LIMITE_PADRAO = 10
 
 @inject()
 export default class PedidosController {

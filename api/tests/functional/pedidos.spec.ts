@@ -769,6 +769,7 @@ test.group('Listagem de pedidos', (group) => {
 
     const pagina = await client.get('/api/v1/pedidos?page=2&limit=2').loginAs(cliente)
     const grandeDemais = await client.get('/api/v1/pedidos?limit=101').loginAs(cliente)
+    const fracionada = await client.get('/api/v1/pedidos?page=1.5').loginAs(cliente)
 
     assert.lengthOf(pedidosListados(pagina).data, 1)
     assert.containsSubset(pedidosListados(pagina).metadata, {
@@ -779,6 +780,8 @@ test.group('Listagem de pedidos', (group) => {
     })
     grandeDemais.assertStatus(422)
     assert.equal(errorBody(grandeDemais).details[0].field, 'limit')
+    fracionada.assertStatus(422)
+    assert.equal(errorBody(fracionada).details[0].field, 'page')
   })
 
   test('cada pedido vem com os itens e o pagamento', async ({ client, assert }) => {

@@ -4,10 +4,8 @@ import Estoque from '#models/estoque'
 import Unidade from '#models/unidade'
 import { garantirAcessoAUnidade } from '#services/escopo_de_acesso'
 import SaldoEstoqueTransformer from '#transformers/saldo_estoque_transformer'
+import { LIMITE_PADRAO, PAGINA_PADRAO } from '#validators/paginacao'
 import { listarEstoqueValidator } from '#validators/unidade'
-
-const PAGINA_PADRAO = 1
-const LIMITE_PADRAO = 10
 
 export default class EstoquesController {
   async index({ auth, params, request, serialize }: HttpContext) {

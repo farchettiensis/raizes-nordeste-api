@@ -92,9 +92,13 @@ test.group('Unidades', (group) => {
   test('recusa paginacao fora dos limites', async ({ client, assert }) => {
     const acimaDoMaximo = await client.get('/api/v1/unidades?limit=101')
     const paginaZero = await client.get('/api/v1/unidades?page=0')
+    const paginaFracionada = await client.get('/api/v1/unidades?page=1.5')
+    const limiteFracionado = await client.get('/api/v1/unidades?limit=2.5')
 
     acimaDoMaximo.assertStatus(422)
     paginaZero.assertStatus(422)
+    paginaFracionada.assertStatus(422)
+    limiteFracionado.assertStatus(422)
     assert.equal((acimaDoMaximo.body() as { error: string }).error, 'DADOS_INVALIDOS')
   })
 

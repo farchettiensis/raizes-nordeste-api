@@ -4,10 +4,8 @@ import type { HttpContext } from '@adonisjs/core/http'
 import Unidade from '#models/unidade'
 import CardapioService from '#services/cardapio_service'
 import ItemCardapioTransformer from '#transformers/item_cardapio_transformer'
+import { LIMITE_PADRAO, PAGINA_PADRAO } from '#validators/paginacao'
 import { listarCardapioValidator } from '#validators/unidade'
-
-const PAGINA_PADRAO = 1
-const LIMITE_PADRAO = 10
 
 @inject()
 export default class CardapiosController {

@@ -1,6 +1,7 @@
 import vine from '@vinejs/vine'
 
 import { CANAIS_PEDIDO, STATUS_PEDIDO } from '#models/pedido'
+import { paginacao } from '#validators/paginacao'
 
 const identificador = () => vine.number().withoutDecimals().positive()
 
@@ -20,8 +21,7 @@ export const criarPedidoValidator = vine.create({
 })
 
 export const listarPedidosValidator = vine.create({
-  page: vine.number().min(1).optional(),
-  limit: vine.number().min(1).max(100).optional(),
+  ...paginacao(),
   canalPedido: vine.enum(CANAIS_PEDIDO).optional(),
   status: vine.enum(STATUS_PEDIDO).optional(),
   unidadeId: identificador().optional(),
