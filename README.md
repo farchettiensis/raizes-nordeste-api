@@ -143,6 +143,7 @@ O Swagger em `/docs` traz os exemplos de request e response de cada um. Esta tab
 | GET | `/api/v1/pedidos` | token, pedidos no escopo do usuário | Lista pedidos, filtrando por `canalPedido`, `status` e `unidadeId` |
 | POST | `/api/v1/pedidos` | token, perfil CLIENTE | Cria o pedido validando cardápio e estoque da unidade |
 | GET | `/api/v1/pedidos/:id` | token, pedido no escopo do usuário | Pedido com itens e pagamento |
+| PATCH | `/api/v1/pedidos/:id/status` | token, perfil da transição, pedido no escopo | Avança o pedido da cozinha ao balcão |
 | POST | `/api/v1/pedidos/:id/pagamento` | token, perfil CLIENTE, dono do pedido | Solicita o pagamento ao provedor externo |
 | POST | `/api/v1/pagamentos/webhook` | assinatura HMAC do provedor | Recebe o resultado do pagamento |
 
@@ -268,6 +269,23 @@ O webhook não usa token: quem chama é o provedor. A autenticidade vem do cabe�
 - O mock guarda o estado em memória. Se ele reiniciar com pagamentos pendentes, esses pagamentos não recebem mais resultado.
 - Se o provedor esgotar as tentativas de entrega do webhook, o pagamento fica `PENDENTE`. O mock já expõe `GET /pagamentos/:id`, e uma rotina de conciliação que consulte os pendentes antigos é o passo seguinte, ainda não implementado.
 - Um pagamento pendente segura o estoque do pedido pelo tempo que durar, pela mesma razão descrita na criação de pedido.
+
+## Status do pedido
+
+Depois de pago, o pedido avança por `PATCH /api/v1/pedidos/:id/status` com `{ "status": "EM_PREPARO" }`. Cada transição tem os perfis que podem fazê-la, numa tabela ao lado do ciclo de vida no model `Pedido` (`PERFIS_POR_TRANSICAO`), consultada por `pedido.podeSerTransicionadoPor(usuario, destino)`:
+
+| Transição | Perfis |
+|---|---|
+| `PAGO` → `EM_PREPARO` | COZINHA, GERENTE |
+| `EM_PREPARO` → `PRONTO` | COZINHA, GERENTE |
+| `PRONTO` → `ENTREGUE` | ATENDENTE, GERENTE |
+
+- **Cada um no seu posto.** A cozinha começa e termina o preparo, o balcão entrega, e o gerente cobre os dois. ADMIN enxerga todos os pedidos mas não avança nenhum: a matriz não está na cozinha nem no balcão.
+- **`PAGO` não é aceito no corpo** (`422`). Só o webhook do provedor marca o pedido como pago.
+- **A ordem das checagens** é existência (`404`), escopo (`403`), transição prevista no ciclo de vida (`409 TRANSICAO_DE_STATUS_INVALIDA`, com os destinos possíveis em `details`) e perfil (`403 SEM_PERMISSAO`). A transição vem antes do perfil para que um pedido `ENTREGUE` responda `409` a qualquer um, o que descreve melhor o problema.
+- **Transições simultâneas não se somam.** O pedido é travado com `SELECT ... FOR UPDATE` durante as checagens e a gravação. Se a cozinha toca duas vezes em "iniciar preparo", o segundo toque espera o primeiro, encontra o pedido já `EM_PREPARO` e recebe `409`. Há um teste para isso, e sem a trava os dois são aceitos.
+
+Limitação conhecida: não há volta de status. Um toque errado (marcar como pronto antes da hora) não se desfaz, o que preserva o histórico do pedido mas exige cuidado na operação.
 
 ## Padrão de erro
 
