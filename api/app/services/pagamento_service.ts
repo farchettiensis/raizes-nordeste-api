@@ -47,7 +47,16 @@ export default class PagamentoService {
   private async travarPedido(cliente: User, pedidoId: number, trx: TransactionClientContract) {
     const pedido = await Pedido.query({ client: trx }).where('id', pedidoId).forUpdate().first()
 
-    return garantirPedidoVisivel(pedido, cliente, pedidoId)
+    const visivel = garantirPedidoVisivel(pedido, cliente, pedidoId)
+
+    if (!visivel.pertenceA(cliente)) {
+      throw new ApiException('Somente o cliente dono do pedido pode paga-lo.', {
+        code: 'SEM_PERMISSAO',
+        status: 403,
+      })
+    }
+
+    return visivel
   }
 
   private exigirAguardandoPagamento(pedido: Pedido) {

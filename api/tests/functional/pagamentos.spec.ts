@@ -145,6 +145,19 @@ test.group('Solicitacao de pagamento', (group) => {
     assert.isNull(await Pagamento.findBy('pedidoId', pedido.id))
   })
 
+  test('o servico so aceita o pagamento pelo dono, mesmo de quem enxerga o pedido', async ({
+    assert,
+  }) => {
+    const pedido = await pedidoDe(await criarUsuario('CLIENTE'))
+    const admin = await criarUsuario('ADMIN')
+
+    const tentativa = new PagamentoService(gateway).solicitar(admin, pedido.id, 'PIX')
+
+    await assert.rejects(() => tentativa, 'Somente o cliente dono do pedido pode paga-lo.')
+    assert.lengthOf(gateway.chamadas, 0)
+    assert.isNull(await Pagamento.findBy('pedidoId', pedido.id))
+  })
+
   test('pedido inexistente responde 404', async ({ client, assert }) => {
     const cliente = await criarUsuario('CLIENTE')
 
