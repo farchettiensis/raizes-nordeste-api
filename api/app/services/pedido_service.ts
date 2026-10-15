@@ -7,6 +7,7 @@ import ApiException, { type ErrorDetail } from '#exceptions/api_exception'
 import Estoque from '#models/estoque'
 import MovimentacaoEstoque from '#models/movimentacao_estoque'
 import Pedido, {
+  STATUS_DEFINIDOS_PELA_OPERACAO,
   TRANSICOES_STATUS_PEDIDO,
   type CanalPedido,
   type StatusPedido,
@@ -103,7 +104,9 @@ export default class PedidoService {
       return
     }
 
-    const destinos = TRANSICOES_STATUS_PEDIDO[pedido.status]
+    const destinos = TRANSICOES_STATUS_PEDIDO[pedido.status].filter((status) =>
+      STATUS_DEFINIDOS_PELA_OPERACAO.some((definido) => definido === status)
+    )
 
     throw new ApiException('O pedido nao pode ir do status atual para o solicitado.', {
       code: 'TRANSICAO_DE_STATUS_INVALIDA',
@@ -111,12 +114,20 @@ export default class PedidoService {
       details: [
         {
           field: 'status',
-          issue: pedido.finalizado
-            ? `De ${pedido.status} o pedido nao muda mais de status`
-            : `De ${pedido.status} o pedido so pode ir para: ${destinos.join(', ')}`,
+          issue: this.destinosPossiveis(pedido, destinos),
         },
       ],
     })
+  }
+
+  private destinosPossiveis(pedido: Pedido, destinos: StatusPedido[]) {
+    if (pedido.finalizado) {
+      return `De ${pedido.status} o pedido nao muda mais de status`
+    }
+
+    return destinos.length > 0
+      ? `De ${pedido.status} o pedido so pode ir para: ${destinos.join(', ')}`
+      : `De ${pedido.status} o pedido nao avanca por esta rota`
   }
 
   private exigirPerfilAutorizado(pedido: Pedido, usuario: User, destino: StatusPedido) {

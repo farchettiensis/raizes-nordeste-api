@@ -905,11 +905,29 @@ test.group('Atualizacao de status do pedido', (group) => {
     response.assertStatus(409)
     assert.containsSubset(errorBody(response), {
       error: 'TRANSICAO_DE_STATUS_INVALIDA',
-      details: [
-        { field: 'status', issue: 'De PAGO o pedido so pode ir para: EM_PREPARO, CANCELADO' },
-      ],
+      details: [{ field: 'status', issue: 'De PAGO o pedido so pode ir para: EM_PREPARO' }],
     })
     assert.equal(await statusPersistido(pago), 'PAGO')
+  })
+
+  test('aguardando pagamento, o pedido nao avanca por esta rota', async ({ client, assert }) => {
+    const pedido = await pedidoNoStatus('AGUARDANDO_PAGAMENTO')
+
+    const response = await client
+      .patch(`/api/v1/pedidos/${pedido.id}/status`)
+      .json({ status: 'EM_PREPARO' })
+      .loginAs(await equipeDe(pedido, 'GERENTE'))
+
+    response.assertStatus(409)
+    assert.containsSubset(errorBody(response), {
+      error: 'TRANSICAO_DE_STATUS_INVALIDA',
+      details: [
+        {
+          field: 'status',
+          issue: 'De AGUARDANDO_PAGAMENTO o pedido nao avanca por esta rota',
+        },
+      ],
+    })
   })
 
   test('pedido entregue nao muda mais, qualquer que seja o perfil', async ({ client, assert }) => {

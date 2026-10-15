@@ -1349,7 +1349,7 @@ components:
                 message: O pedido nao pode ir do status atual para o solicitado.
                 details:
                   - field: status
-                    issue: 'De PAGO o pedido so pode ir para: EM_PREPARO, CANCELADO'
+                    issue: 'De PAGO o pedido so pode ir para: EM_PREPARO'
                 timestamp: '2026-02-05T12:00:00.000Z'
                 path: /api/v1/pedidos/9001/status
                 requestId: 4d5e6f7a-8b9c-4d0e-9f2a-3b4c5d6e7f8a
