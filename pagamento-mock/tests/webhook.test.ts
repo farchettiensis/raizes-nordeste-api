@@ -24,6 +24,7 @@ const PAGAMENTO: Pagamento = {
   pix: null,
   criadoEm: '2026-10-04T12:00:00.000Z',
   processadoEm: '2026-10-04T12:01:00.000Z',
+  estornadoEm: null,
 }
 
 describe('EntregadorDeWebhook', () => {

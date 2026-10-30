@@ -240,6 +240,133 @@ describe('POST /simulacoes', () => {
   })
 })
 
+function estornar(
+  app: ReturnType<typeof criarApp>,
+  id: string,
+  chave: string | null = 'estorno-1'
+) {
+  return app.inject({
+    method: 'POST',
+    url: `/pagamentos/${id}/estorno`,
+    headers: chave === null ? {} : { 'idempotency-key': chave },
+  })
+}
+
+async function criarAprovado(app: ReturnType<typeof criarApp>): Promise<string> {
+  const id = await criarPendente(app)
+  await simular(app, { pagamentoId: id, resultado: 'APROVADO' })
+
+  return id
+}
+
+describe('POST /pagamentos/:id/estorno', () => {
+  test('estorna o pagamento aprovado', async () => {
+    const { app } = montar()
+    const id = await criarAprovado(app)
+
+    const resposta = await estornar(app, id)
+
+    assert.equal(resposta.statusCode, 201)
+    const pagamento = resposta.json()
+    assert.equal(pagamento.id, id)
+    assert.equal(pagamento.status, 'ESTORNADO')
+    assert.ok(pagamento.estornadoEm)
+
+    const consulta = await app.inject({ method: 'GET', url: `/pagamentos/${id}` })
+    assert.equal(consulta.json().status, 'ESTORNADO')
+  })
+
+  test('repetir a chave devolve o mesmo estorno', async () => {
+    const { app } = montar()
+    const id = await criarAprovado(app)
+
+    const primeiro = await estornar(app, id)
+    const repetido = await estornar(app, id)
+
+    assert.equal(repetido.statusCode, 200)
+    assert.deepEqual(repetido.json(), primeiro.json())
+  })
+
+  test('nao estorna de novo com outra chave', async () => {
+    const { app } = montar()
+    const id = await criarAprovado(app)
+
+    await estornar(app, id)
+    const resposta = await estornar(app, id, 'estorno-2')
+
+    assert.equal(resposta.statusCode, 409)
+    assert.equal(resposta.json().erro.codigo, 'ESTORNO_NAO_PERMITIDO')
+  })
+
+  test('nao reaproveita a chave para outro pagamento', async () => {
+    const { app } = montar()
+    const primeiro = await criarAprovado(app)
+    const outroPendente = await solicitar(
+      app,
+      { ...SOLICITACAO, referencia: 'pagamento-2' },
+      'chave-2'
+    )
+    const outro = outroPendente.json().id
+    await simular(app, { pagamentoId: outro, resultado: 'APROVADO' })
+
+    await estornar(app, primeiro)
+    const resposta = await estornar(app, outro)
+
+    assert.equal(resposta.statusCode, 409)
+    assert.equal(resposta.json().erro.codigo, 'CHAVE_IDEMPOTENCIA_REUTILIZADA')
+  })
+
+  test('nao estorna pagamento pendente nem recusado', async () => {
+    const { app } = montar()
+    const pendente = await criarPendente(app)
+    const recusadoPendente = await solicitar(
+      app,
+      { ...SOLICITACAO, referencia: 'pagamento-2' },
+      'chave-2'
+    )
+    const recusado = recusadoPendente.json().id
+    await simular(app, { pagamentoId: recusado, resultado: 'RECUSADO' })
+
+    for (const id of [pendente, recusado]) {
+      const resposta = await estornar(app, id, `estorno-${id}`)
+
+      assert.equal(resposta.statusCode, 409)
+      assert.equal(resposta.json().erro.codigo, 'ESTORNO_NAO_PERMITIDO')
+    }
+  })
+
+  test('responde 404 para pagamento inexistente', async () => {
+    const { app } = montar()
+
+    const resposta = await estornar(app, 'pag_inexistente')
+
+    assert.equal(resposta.statusCode, 404)
+    assert.equal(resposta.json().erro.codigo, 'PAGAMENTO_NAO_ENCONTRADO')
+  })
+
+  test('exige a chave de idempotencia', async () => {
+    const { app } = montar()
+    const id = await criarAprovado(app)
+
+    const resposta = await estornar(app, id, null)
+
+    assert.equal(resposta.statusCode, 422)
+    assert.equal(resposta.json().erro.detalhes[0].campo, 'idempotency-key')
+  })
+
+  test('falha simulada responde 503 sem estornar', async () => {
+    const sorteios = [1, 0, 1]
+    const { app } = montar({ taxaFalha: 0.5, sortear: () => sorteios.shift()! })
+    const id = await criarAprovado(app)
+
+    const falha = await estornar(app, id)
+    const retentativa = await estornar(app, id)
+
+    assert.equal(falha.statusCode, 503)
+    assert.equal(retentativa.statusCode, 201)
+  })
+})
+
 test('rota desconhecida responde no formato de erro do provedor', async () => {
   const { app } = montar()
 

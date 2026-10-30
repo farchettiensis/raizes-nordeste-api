@@ -10,7 +10,7 @@ export const RESULTADOS = ['APROVADO', 'RECUSADO'] as const
 
 export type Resultado = (typeof RESULTADOS)[number]
 
-export type StatusPagamento = 'PENDENTE' | Resultado
+export type StatusPagamento = 'PENDENTE' | Resultado | 'ESTORNADO'
 
 export const MOTIVO_RECUSA_PADRAO = 'Pagamento recusado pelo emissor (simulado)'
 
@@ -32,11 +32,20 @@ export type Pagamento = {
   pix: { copiaECola: string } | null
   criadoEm: string
   processadoEm: string | null
+  estornadoEm: string | null
 }
 
 export type Criacao = {
   pagamento: Pagamento
   repetida: boolean
+}
+
+function chaveReutilizada() {
+  return new ErroDoProvedor(
+    409,
+    'CHAVE_IDEMPOTENCIA_REUTILIZADA',
+    'A chave de idempotencia ja foi usada com outro conteudo.'
+  )
 }
 
 function impressaoDa(solicitacao: SolicitacaoPagamento) {
@@ -54,6 +63,7 @@ function cobrancaPix() {
 export class RegistroDePagamentos {
   #porId = new Map<string, Pagamento>()
   #porChave = new Map<string, { impressao: string; pagamentoId: string }>()
+  #estornoPorChave = new Map<string, string>()
 
   criar(chaveIdempotencia: string, solicitacao: SolicitacaoPagamento): Criacao {
     const impressao = impressaoDa(solicitacao)
@@ -61,11 +71,7 @@ export class RegistroDePagamentos {
 
     if (anterior) {
       if (anterior.impressao !== impressao) {
-        throw new ErroDoProvedor(
-          409,
-          'CHAVE_IDEMPOTENCIA_REUTILIZADA',
-          'A chave de idempotencia ja foi usada com outro conteudo.'
-        )
+        throw chaveReutilizada()
       }
 
       return { pagamento: this.buscar(anterior.pagamentoId), repetida: true }
@@ -82,6 +88,7 @@ export class RegistroDePagamentos {
       pix: solicitacao.metodo === 'PIX' ? cobrancaPix() : null,
       criadoEm: new Date().toISOString(),
       processadoEm: null,
+      estornadoEm: null,
     }
 
     this.#porId.set(pagamento.id, pagamento)
@@ -116,5 +123,32 @@ export class RegistroDePagamentos {
     pagamento.processadoEm = new Date().toISOString()
 
     return pagamento
+  }
+
+  estornar(chaveIdempotencia: string, id: string): Criacao {
+    const pagamento = this.buscar(id)
+    const estornado = this.#estornoPorChave.get(chaveIdempotencia)
+
+    if (estornado !== undefined) {
+      if (estornado !== id) {
+        throw chaveReutilizada()
+      }
+
+      return { pagamento, repetida: true }
+    }
+
+    if (pagamento.status !== 'APROVADO') {
+      throw new ErroDoProvedor(
+        409,
+        'ESTORNO_NAO_PERMITIDO',
+        `Pagamento ${id} esta ${pagamento.status} e nao pode ser estornado.`
+      )
+    }
+
+    pagamento.status = 'ESTORNADO'
+    pagamento.estornadoEm = new Date().toISOString()
+    this.#estornoPorChave.set(chaveIdempotencia, id)
+
+    return { pagamento, repetida: false }
   }
 }

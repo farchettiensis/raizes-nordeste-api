@@ -97,6 +97,12 @@ export function criarApp(dependencias: Dependencias) {
 
   const app = Fastify({ logger, ajv: { customOptions: { coerceTypes: false } } })
 
+  function simularFalha() {
+    if (sortear() < taxaFalha) {
+      throw new ErroDoProvedor(503, 'PROVEDOR_INDISPONIVEL', 'Falha simulada no provedor.')
+    }
+  }
+
   app.setErrorHandler<FastifyError | ErroDoProvedor>((erro, request, reply) => {
     const traduzido = traduzirErro(erro)
 
@@ -127,9 +133,7 @@ export function criarApp(dependencias: Dependencias) {
     '/pagamentos',
     { schema: { headers: chaveDeIdempotencia, body: solicitacaoDePagamento } },
     async (request, reply) => {
-      if (sortear() < taxaFalha) {
-        throw new ErroDoProvedor(503, 'PROVEDOR_INDISPONIVEL', 'Falha simulada no provedor.')
-      }
+      simularFalha()
 
       const { pagamento, repetida } = registro.criar(
         request.headers['idempotency-key'],
@@ -142,6 +146,21 @@ export function criarApp(dependencias: Dependencias) {
 
   app.get<{ Params: { id: string } }>('/pagamentos/:id', async (request) =>
     registro.buscar(request.params.id)
+  )
+
+  app.post<{ Params: { id: string }; Headers: { 'idempotency-key': string } }>(
+    '/pagamentos/:id/estorno',
+    { schema: { headers: chaveDeIdempotencia } },
+    async (request, reply) => {
+      simularFalha()
+
+      const { pagamento, repetida } = registro.estornar(
+        request.headers['idempotency-key'],
+        request.params.id
+      )
+
+      return reply.status(repetida ? 200 : 201).send(pagamento)
+    }
   )
 
   app.post<{ Body: Simulacao }>(

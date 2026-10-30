@@ -103,6 +103,49 @@ paths:
                 $ref: '#/components/schemas/Pagamento'
         '404':
           $ref: '#/components/responses/Erro'
+  /pagamentos/{id}/estorno:
+    post:
+      summary: Estorna um pagamento aprovado
+      description: |
+        Síncrono, sem webhook: quem pede o estorno já espera a resposta. Repetir a
+        chave de idempotência devolve o mesmo estorno com 200. Só pagamentos
+        APROVADO podem ser estornados: os demais respondem 409
+        `ESTORNO_NAO_PERMITIDO`, e a chave já usada em outro pagamento responde 409
+        `CHAVE_IDEMPOTENCIA_REUTILIZADA`. Com `FAILURE_RATE` acima de zero, parte
+        das chamadas responde 503 sem estornar nada.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            maxLength: 255
+      responses:
+        '201':
+          description: Pagamento estornado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pagamento'
+        '200':
+          description: Repetição do mesmo estorno, devolve o pagamento estornado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pagamento'
+        '404':
+          $ref: '#/components/responses/Erro'
+        '409':
+          $ref: '#/components/responses/Erro'
+        '422':
+          $ref: '#/components/responses/Erro'
+        '503':
+          $ref: '#/components/responses/Erro'
   /simulacoes:
     post:
       summary: Decide o resultado de um pagamento pendente e dispara o webhook
@@ -181,7 +224,7 @@ components:
           nullable: true
         status:
           type: string
-          enum: [PENDENTE, APROVADO, RECUSADO]
+          enum: [PENDENTE, APROVADO, RECUSADO, ESTORNADO]
         motivoRecusa:
           type: string
           nullable: true
@@ -196,6 +239,10 @@ components:
           type: string
           format: date-time
         processadoEm:
+          type: string
+          format: date-time
+          nullable: true
+        estornadoEm:
           type: string
           format: date-time
           nullable: true
