@@ -7,7 +7,7 @@ import LogAuditoria, { type AcaoAuditoria } from '#models/log_auditoria'
 import Pagamento from '#models/pagamento'
 import type Pedido from '#models/pedido'
 import type Unidade from '#models/unidade'
-import type User from '#models/user'
+import User from '#models/user'
 import { GatewayPagamento } from '#services/gateway_pagamento'
 import PedidoService from '#services/pedido_service'
 import {
@@ -194,5 +194,95 @@ test.group('Auditoria do pedido', (group) => {
     response.assertStatus(503)
     assert.lengthOf(await registrosDe('pedido.cancelado'), 0)
     assert.lengthOf(await registrosDe('pagamento.estornado'), 0)
+  })
+})
+
+test.group('Auditoria da autenticacao', (group) => {
+  group.each.setup(() => testUtils.db().truncate())
+
+  test('cadastro registra o perfil, sem nome nem e-mail', async ({ client, assert }) => {
+    const response = await client.post('/api/v1/auth/signup').json({
+      fullName: 'Maria Bonita',
+      email: 'maria@raizes.test',
+      password: 'Senha@123',
+      passwordConfirmation: 'Senha@123',
+    })
+
+    response.assertStatus(201)
+    const usuario = await User.findByOrFail('email', 'maria@raizes.test')
+    const registro = await unicoRegistroDe('usuario.cadastrado')
+    assert.containsSubset(registro.toJSON(), {
+      usuarioId: usuario.id,
+      entidade: 'user',
+      entidadeId: String(usuario.id),
+      dados: { perfil: 'CLIENTE' },
+    })
+    assert.notInclude(JSON.stringify(registro.dados), 'maria')
+  })
+
+  test('login registra o acesso de quem entrou', async ({ client, assert }) => {
+    const usuario = await criarUsuario('ATENDENTE')
+
+    const response = await client
+      .post('/api/v1/auth/login')
+      .json({ email: usuario.email, password: 'Senha@123' })
+
+    response.assertStatus(200)
+    const registro = await unicoRegistroDe('auth.login')
+    assert.containsSubset(registro.toJSON(), {
+      usuarioId: usuario.id,
+      entidade: 'user',
+      entidadeId: String(usuario.id),
+      dados: null,
+    })
+  })
+
+  test('senha errada registra a tentativa contra a conta, sem o e-mail', async ({
+    client,
+    assert,
+  }) => {
+    const usuario = await criarUsuario('GERENTE')
+
+    const response = await client
+      .post('/api/v1/auth/login')
+      .json({ email: usuario.email, password: 'errada-123' })
+
+    response.assertStatus(401)
+    const registro = await unicoRegistroDe('auth.login_negado')
+    assert.containsSubset(registro.toJSON(), {
+      usuarioId: null,
+      entidade: 'user',
+      entidadeId: String(usuario.id),
+      dados: null,
+    })
+    assert.isString(registro.ip)
+  })
+
+  test('e-mail desconhecido tambem registra a tentativa, sem conta alvo', async ({
+    client,
+    assert,
+  }) => {
+    const response = await client
+      .post('/api/v1/auth/login')
+      .json({ email: 'ninguem@raizes.test', password: 'qualquer-123' })
+
+    response.assertStatus(401)
+    const registro = await unicoRegistroDe('auth.login_negado')
+    assert.isNull(registro.entidadeId)
+    assert.isNull(registro.usuarioId)
+  })
+
+  test('logout registra a saida', async ({ client, assert }) => {
+    const usuario = await criarUsuario('CLIENTE')
+    const login = await client
+      .post('/api/v1/auth/login')
+      .json({ email: usuario.email, password: 'Senha@123' })
+    const { token } = (login.body() as { data: { token: string } }).data
+
+    const response = await client.post('/api/v1/account/logout').bearerToken(token)
+
+    response.assertStatus(200)
+    const registro = await unicoRegistroDe('auth.logout')
+    assert.equal(registro.usuarioId, usuario.id)
   })
 })
