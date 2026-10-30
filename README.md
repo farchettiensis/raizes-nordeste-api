@@ -146,6 +146,7 @@ O Swagger em `/docs` traz os exemplos de request e response de cada um. Esta tab
 | PATCH | `/api/v1/pedidos/:id/status` | token, perfil da transição, pedido no escopo | Avança o pedido da cozinha ao balcão ou o cancela |
 | POST | `/api/v1/pedidos/:id/pagamento` | token, perfil CLIENTE, dono do pedido | Solicita o pagamento ao provedor externo |
 | POST | `/api/v1/pagamentos/webhook` | assinatura HMAC do provedor | Recebe o resultado do pagamento |
+| GET | `/api/v1/auditoria` | token, perfil ADMIN | Trilha de auditoria das ações sensíveis, com filtros |
 
 Listagens aceitam `?page=1&limit=10` e respondem `{ "data": [...], "metadata": { ... } }`.
 
@@ -305,6 +306,29 @@ Como no pagamento, a chamada ao provedor fica fora da transação. A API confere
 - Não há volta de status. Um toque errado (marcar como pronto antes da hora) não se desfaz, o que preserva o histórico do pedido mas exige cuidado na operação.
 - Um pagamento que fica `PENDENTE` para sempre (webhook perdido) impede o cancelamento do pedido. Resolver isso depende da conciliação de pagamentos, ainda não implementada.
 - O mock guarda os pagamentos em memória: depois de reiniciado, o estorno de um pagamento antigo responde `404` no mock e `502` na API.
+
+## Auditoria
+
+Toda ação sensível deixa um registro em `logs_auditoria`, que a matriz consulta por `GET /api/v1/auditoria` (só ADMIN), filtrando por `acao`, `entidade`, `entidadeId` e `usuarioId`. O histórico completo de um pedido sai de `?entidade=pedido&entidadeId=<id>`.
+
+| Ação | Quando |
+|---|---|
+| `usuario.cadastrado` | cadastro de conta (guarda só o perfil) |
+| `auth.login`, `auth.logout` | entrada e saída |
+| `auth.login_negado` | senha errada ou e-mail desconhecido; aponta a conta alvo quando ela existe |
+| `pedido.criado` | criação do pedido, com unidade, canal e total |
+| `pedido.status_alterado` | toda mudança de status, inclusive as do webhook (com `usuarioId` nulo) |
+| `pedido.cancelado` | cancelamento, com o status de origem, o motivo, se houve estorno e se o estoque voltou |
+| `pagamento.solicitado`, `pagamento.aprovado`, `pagamento.recusado`, `pagamento.estornado` | ciclo do pagamento |
+| `acesso.negado` | qualquer `403` da API, com método, rota, parâmetros e código do erro |
+
+- **Na mesma transação da ação.** O registro é gravado dentro da transação que muda o pedido ou o pagamento: ou os dois entram, ou nenhum. Uma ação que falha (estoque insuficiente, provedor fora do ar no estorno) não deixa registro de sucesso, e uma ação gravada nunca fica sem registro.
+- **Negações fora da transação.** O `403` já desfez a ação, então o registro de `acesso.negado` é gravado pelo tratador de erros, para qualquer rota. Se a gravação falhar, o erro vai para o log da aplicação e a resposta continua sendo o `403` original. O `401` por falta de token não é registrado, porque não identifica ninguém e só faria ruído; a tentativa de login com senha errada é.
+- **Rastreável até a requisição.** Cada registro guarda o `ip` e o `requestId`, o mesmo do cabeçalho `X-Request-Id` e do corpo de erro. Os dois vêm do contexto HTTP pelo `AsyncLocalStorage` do AdonisJS (`useAsyncLocalStorage: true`), sem precisar passar o contexto por cada serviço.
+- **Minimização (LGPD).** Os registros não guardam nome, e-mail, senha, token nem o payload do provedor: só identificadores, status, valores e motivos. O IP é dado pessoal e por isso a consulta é restrita ao ADMIN.
+- **Retenção.** Os registros devem ser mantidos por pelo menos 6 meses, o prazo de guarda de registros de acesso a aplicações do Marco Civil da Internet (Lei 12.965/2014, art. 15).
+
+Limitações conhecidas: não há expurgo automático depois do prazo de retenção, e leituras de dados pessoais (como `GET /account/profile`) não são registradas, para não encher a trilha com consultas rotineiras.
 
 ## Padrão de erro
 
