@@ -29,4 +29,11 @@ export const listarPedidosValidator = vine.create({
 
 export const atualizarStatusValidator = vine.create({
   status: vine.enum(STATUS_DEFINIDOS_PELA_OPERACAO),
+  motivo: vine
+    .string()
+    .trim()
+    .minLength(3)
+    .maxLength(255)
+    .optional()
+    .requiredWhen('status', '=', 'CANCELADO'),
 })

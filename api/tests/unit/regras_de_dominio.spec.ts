@@ -88,6 +88,15 @@ test.group('Ciclo de vida do pedido', () => {
     })
   })
 
+  test('cancelado antes do preparo, o pedido devolve o estoque; depois, os insumos ja foram usados', ({
+    assert,
+  }) => {
+    assert.isTrue(pedidoCom('AGUARDANDO_PAGAMENTO').devolveEstoqueAoCancelar)
+    assert.isTrue(pedidoCom('PAGO').devolveEstoqueAoCancelar)
+    assert.isFalse(pedidoCom('EM_PREPARO').devolveEstoqueAoCancelar)
+    assert.isFalse(pedidoCom('PRONTO').devolveEstoqueAoCancelar)
+  })
+
   test('nenhum status transiciona para si mesmo', ({ assert }) => {
     STATUS_PEDIDO.forEach((status) => {
       assert.notInclude(TRANSICOES_STATUS_PEDIDO[status], status)

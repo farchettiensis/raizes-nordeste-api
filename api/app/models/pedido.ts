@@ -34,7 +34,10 @@ export const STATUS_DEFINIDOS_PELA_OPERACAO = [
   'EM_PREPARO',
   'PRONTO',
   'ENTREGUE',
+  'CANCELADO',
 ] as const satisfies readonly StatusPedido[]
+
+const STATUS_COM_INSUMOS_INTACTOS: StatusPedido[] = ['AGUARDANDO_PAGAMENTO', 'PAGO']
 
 const CANCELAM_DEPOIS_DE_PAGO: PerfilUsuario[] = ['GERENTE', 'ADMIN']
 
@@ -81,6 +84,10 @@ export default class Pedido extends PedidoSchema {
 
   get finalizado() {
     return TRANSICOES_STATUS_PEDIDO[this.status].length === 0
+  }
+
+  get devolveEstoqueAoCancelar() {
+    return STATUS_COM_INSUMOS_INTACTOS.includes(this.status)
   }
 
   pertenceA(usuario: User) {

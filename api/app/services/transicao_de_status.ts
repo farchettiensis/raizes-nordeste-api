@@ -16,9 +16,7 @@ function destinosPossiveis(pedido: Pedido) {
     STATUS_DEFINIDOS_PELA_OPERACAO.some((definido) => definido === status)
   )
 
-  return destinos.length > 0
-    ? `De ${pedido.status} o pedido so pode ir para: ${destinos.join(', ')}`
-    : `De ${pedido.status} o pedido nao avanca por esta rota`
+  return `De ${pedido.status} o pedido so pode ir para: ${destinos.join(', ')}`
 }
 
 export function garantirTransicaoPermitida(pedido: Pedido, destino: StatusPedido) {

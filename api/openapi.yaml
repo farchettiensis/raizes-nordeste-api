@@ -415,27 +415,42 @@ paths:
   /api/v1/pedidos/{id}/status:
     patch:
       tags: [Pedidos]
-      summary: Avanca o pedido no ciclo de vida da cozinha ao balcao
+      summary: Avanca o pedido no ciclo de vida ou cancela o pedido
       description: |
-        Leva o pedido ao proximo status. Cada transicao tem os perfis que
-        podem faze-la:
+        Leva o pedido ao proximo status ou o cancela. Cada transicao tem os
+        perfis que podem faze-la:
 
         | Transicao | Perfis |
         |---|---|
         | PAGO para EM_PREPARO | COZINHA, GERENTE |
         | EM_PREPARO para PRONTO | COZINHA, GERENTE |
         | PRONTO para ENTREGUE | ATENDENTE, GERENTE |
+        | AGUARDANDO_PAGAMENTO para CANCELADO | CLIENTE dono, ATENDENTE, GERENTE, ADMIN |
+        | PAGO, EM_PREPARO ou PRONTO para CANCELADO | GERENTE, ADMIN |
 
         ATENDENTE, COZINHA e GERENTE so agem sobre pedidos da propria
-        unidade. ADMIN nao faz transicoes de avanco, porque a matriz nao
-        opera a cozinha nem o balcao. PAGO nao e aceito: so o webhook do
-        provedor marca o pedido como pago.
+        unidade, e o CLIENTE so sobre os proprios. ADMIN cancela, mas nao faz
+        transicoes de avanco, porque a matriz nao opera a cozinha nem o
+        balcao. PAGO nao e aceito: so o webhook do provedor marca o pedido
+        como pago.
 
         As checagens rodam com o pedido travado, nesta ordem: existencia
         (404), escopo (403), transicao prevista no ciclo de vida (409, com os
         destinos possiveis a partir do status atual) e perfil (403). Duas
         transicoes simultaneas do mesmo pedido nunca sao aplicadas juntas: a
         segunda espera a primeira e recebe 409. Nao ha volta de status.
+
+        Cancelar exige `motivo` e segue estas regras:
+
+        - Pagamento PENDENTE: 409 `PAGAMENTO_EM_ANDAMENTO`. Uma aprovacao que
+          chegasse depois do cancelamento deixaria uma cobranca sem estorno.
+        - Pagamento APROVADO: a API pede o estorno ao provedor antes de
+          cancelar. Se o provedor falhar (502 ou 503), o pedido nao muda, e
+          repetir a chamada reenvia o estorno com a mesma chave de
+          idempotencia, sem estornar duas vezes.
+        - O estoque volta (uma ENTRADA por item) so quando o pedido e
+          cancelado de AGUARDANDO_PAGAMENTO ou PAGO. De EM_PREPARO ou PRONTO
+          os insumos ja foram usados: ha estorno, mas o estoque nao volta.
       parameters:
         - $ref: '#/components/parameters/PedidoId'
       requestBody:
@@ -444,8 +459,14 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/AtualizacaoDeStatus'
-            example:
-              status: EM_PREPARO
+            examples:
+              avanco:
+                value:
+                  status: EM_PREPARO
+              cancelamento:
+                value:
+                  status: CANCELADO
+                  motivo: Cliente desistiu no balcao
       responses:
         '200':
           description: Status atualizado
@@ -467,6 +488,10 @@ paths:
           $ref: '#/components/responses/TransicaoDeStatusInvalida'
         '422':
           $ref: '#/components/responses/DadosInvalidos'
+        '502':
+          $ref: '#/components/responses/GatewayPagamentoErro'
+        '503':
+          $ref: '#/components/responses/EstornoIndisponivel'
 
   /api/v1/pedidos/{id}/pagamento:
     post:
@@ -875,8 +900,13 @@ components:
       properties:
         status:
           type: string
-          enum: [EM_PREPARO, PRONTO, ENTREGUE]
+          enum: [EM_PREPARO, PRONTO, ENTREGUE, CANCELADO]
           description: Status de destino
+        motivo:
+          type: string
+          minLength: 3
+          maxLength: 255
+          description: Obrigatorio ao cancelar; ignorado nas demais transicoes
 
     NovoPagamento:
       type: object
@@ -1350,7 +1380,9 @@ components:
                 requestId: 3c4d5e6f-7a8b-4c9d-8e1f-2a3b4c5d6e7f
 
     TransicaoDeStatusInvalida:
-      description: Transicao fora do ciclo de vida do pedido, com os destinos possiveis
+      description: |
+        Transicao fora do ciclo de vida do pedido, com os destinos possiveis,
+        ou cancelamento com o pagamento ainda em andamento
       content:
         application/json:
           schema:
@@ -1362,7 +1394,7 @@ components:
                 message: O pedido nao pode ir do status atual para o solicitado.
                 details:
                   - field: status
-                    issue: 'De PAGO o pedido so pode ir para: EM_PREPARO'
+                    issue: 'De PAGO o pedido so pode ir para: EM_PREPARO, CANCELADO'
                 timestamp: '2026-02-05T12:00:00.000Z'
                 path: /api/v1/pedidos/9001/status
                 requestId: 4d5e6f7a-8b9c-4d0e-9f2a-3b4c5d6e7f8a
@@ -1376,6 +1408,14 @@ components:
                 timestamp: '2026-02-05T12:00:00.000Z'
                 path: /api/v1/pedidos/9001/status
                 requestId: 5e6f7a8b-9c0d-4e1f-8a3b-4c5d6e7f8a9b
+            pagamentoEmAndamento:
+              value:
+                error: PAGAMENTO_EM_ANDAMENTO
+                message: O pagamento deste pedido ainda esta em andamento. Aguarde o resultado para cancelar.
+                details: []
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/pedidos/9001/status
+                requestId: 6f7a8b9c-0d1e-4f2a-9b3c-5d6e7f8a9b0c
 
     PedidoNaoEncontrado:
       description: O pedido informado nao existe
@@ -1450,6 +1490,23 @@ components:
             timestamp: '2026-02-05T12:00:00.000Z'
             path: /api/v1/pedidos/9001/pagamento
             requestId: c06b7c8d-9eaf-4b01-82c3-e4f5a6b7c8d9
+
+    EstornoIndisponivel:
+      description: |
+        O provedor nao respondeu ao pedido de estorno depois das retentativas.
+        O pedido continua no status anterior e repetir a chamada reenvia o
+        estorno com a mesma chave de idempotencia.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          example:
+            error: GATEWAY_PAGAMENTO_INDISPONIVEL
+            message: O provedor de pagamento nao respondeu. Tente novamente.
+            details: []
+            timestamp: '2026-02-05T12:00:00.000Z'
+            path: /api/v1/pedidos/9001/status
+            requestId: d17c8d9e-afb0-4c12-93d4-f5a6b7c8d9ea
 
     AssinaturaInvalida:
       description: Cabecalho X-Assinatura ausente, invalido ou expirado

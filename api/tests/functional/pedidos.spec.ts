@@ -1,15 +1,18 @@
+import type { ApiClient } from '@japa/api-client'
 import { test } from '@japa/runner'
+import app from '@adonisjs/core/services/app'
 import testUtils from '@adonisjs/core/services/test_utils'
 
 import Estoque from '#models/estoque'
 import MovimentacaoEstoque from '#models/movimentacao_estoque'
-import Pagamento from '#models/pagamento'
+import Pagamento, { type StatusPagamento } from '#models/pagamento'
 import Pedido, { type StatusPedido } from '#models/pedido'
 import PedidoItem from '#models/pedido_item'
 import type Produto from '#models/produto'
 import type Unidade from '#models/unidade'
 import UnidadeProduto from '#models/unidade_produto'
 import User, { PERFIS_DA_UNIDADE, type PerfilUsuario } from '#models/user'
+import { GatewayPagamento } from '#services/gateway_pagamento'
 import PedidoService from '#services/pedido_service'
 import {
   agora,
@@ -20,6 +23,7 @@ import {
   criarUnidade,
   criarUsuario,
 } from '#tests/helpers/fixtures'
+import GatewayFalso from '#tests/helpers/gateway_falso'
 import { comPedidoTravado } from '#tests/helpers/trava'
 
 type ItemDoPedido = {
@@ -41,7 +45,9 @@ type PedidoCriado = {
     desconto: string
     total: string
     itens: ItemDoPedido[]
-    pagamento?: { status: string } | null
+    pagamento?: { status: string; estornadoEm: string | null } | null
+    canceladoEm?: string | null
+    motivoCancelamento?: string | null
     createdAt: string
   }
 }
@@ -906,12 +912,14 @@ test.group('Atualizacao de status do pedido', (group) => {
     response.assertStatus(409)
     assert.containsSubset(errorBody(response), {
       error: 'TRANSICAO_DE_STATUS_INVALIDA',
-      details: [{ field: 'status', issue: 'De PAGO o pedido so pode ir para: EM_PREPARO' }],
+      details: [
+        { field: 'status', issue: 'De PAGO o pedido so pode ir para: EM_PREPARO, CANCELADO' },
+      ],
     })
     assert.equal(await statusPersistido(pago), 'PAGO')
   })
 
-  test('aguardando pagamento, o pedido nao avanca por esta rota', async ({ client, assert }) => {
+  test('aguardando pagamento, o pedido so pode ser cancelado', async ({ client, assert }) => {
     const pedido = await pedidoNoStatus('AGUARDANDO_PAGAMENTO')
 
     const response = await client
@@ -925,7 +933,7 @@ test.group('Atualizacao de status do pedido', (group) => {
       details: [
         {
           field: 'status',
-          issue: 'De AGUARDANDO_PAGAMENTO o pedido nao avanca por esta rota',
+          issue: 'De AGUARDANDO_PAGAMENTO o pedido so pode ir para: CANCELADO',
         },
       ],
     })
@@ -1058,5 +1066,276 @@ test.group('Atualizacao de status do pedido', (group) => {
       [200, 409]
     )
     assert.equal(await statusPersistido(pedido), 'EM_PREPARO')
+  })
+})
+
+test.group('Cancelamento de pedido', (group) => {
+  const gateway = new GatewayFalso()
+
+  group.setup(() => {
+    app.container.swap(GatewayPagamento, () => gateway)
+
+    return () => app.container.restore(GatewayPagamento)
+  })
+
+  group.each.setup(() => {
+    gateway.reiniciar()
+
+    return testUtils.db().truncate()
+  })
+
+  type Cenario = {
+    pedido: Pedido
+    unidade: Unidade
+    produto: Produto
+    cliente: User
+  }
+
+  async function pedidoNoStatus(
+    status: StatusPedido,
+    statusPagamento?: StatusPagamento
+  ): Promise<Cenario> {
+    const unidade = await criarUnidade()
+    const produto = await ofertar(unidade, '18.50', 10)
+    const cliente = await criarUsuario('CLIENTE')
+    const pedido = await new PedidoService().criar(cliente, {
+      unidadeId: unidade.id,
+      canalPedido: 'APP',
+      itens: [{ produtoId: produto.id, quantidade: 3 }],
+    })
+
+    if (statusPagamento) {
+      await Pagamento.create({
+        pedidoId: pedido.id,
+        metodo: 'PIX',
+        valor: pedido.total,
+        status: statusPagamento,
+        referenciaExterna: `pag_${pedido.id}`,
+      })
+    }
+
+    pedido.status = status
+    await pedido.save()
+
+    return { pedido, unidade, produto, cliente }
+  }
+
+  function equipeDe(pedido: Pedido, perfil: PerfilUsuario) {
+    return criarUsuario(perfil, { unidadeId: pedido.unidadeId })
+  }
+
+  function cancelar(client: ApiClient, pedido: Pedido, usuario: User, motivo?: string) {
+    return client
+      .patch(`/api/v1/pedidos/${pedido.id}/status`)
+      .json({ status: 'CANCELADO', motivo: motivo ?? 'Cliente desistiu no balcao' })
+      .loginAs(usuario)
+  }
+
+  async function recarregado(pedido: Pedido) {
+    return Pedido.query().where('id', pedido.id).preload('pagamento').firstOrFail()
+  }
+
+  async function statusPersistido(pedido: Pedido) {
+    const salvo = await recarregado(pedido)
+
+    return salvo.status
+  }
+
+  test('cancelar exige um motivo de 3 a 255 caracteres', async ({ client, assert }) => {
+    const { pedido, cliente } = await pedidoNoStatus('AGUARDANDO_PAGAMENTO')
+
+    for (const corpo of [
+      { status: 'CANCELADO' },
+      { status: 'CANCELADO', motivo: 'ok' },
+      { status: 'CANCELADO', motivo: 'x'.repeat(256) },
+    ]) {
+      const response = await client
+        .patch(`/api/v1/pedidos/${pedido.id}/status`)
+        .json(corpo as never)
+        .loginAs(cliente)
+
+      response.assertStatus(422)
+      assert.equal(errorBody(response).details[0].field, 'motivo')
+    }
+
+    assert.equal(await statusPersistido(pedido), 'AGUARDANDO_PAGAMENTO')
+  })
+
+  test('o cliente cancela o proprio pedido aguardando pagamento e o estoque volta', async ({
+    client,
+    assert,
+  }) => {
+    const { pedido, unidade, produto, cliente } = await pedidoNoStatus('AGUARDANDO_PAGAMENTO')
+
+    const response = await cancelar(client, pedido, cliente, 'Desisti do pedido')
+
+    response.assertStatus(200)
+    const { data } = pedidoCriado(response)
+    assert.equal(data.status, 'CANCELADO')
+    assert.equal(data.motivoCancelamento, 'Desisti do pedido')
+    assert.isString(data.canceladoEm)
+
+    const salvo = await recarregado(pedido)
+    assert.equal(salvo.status, 'CANCELADO')
+    assert.equal(salvo.motivoCancelamento, 'Desisti do pedido')
+    assert.isNotNull(salvo.canceladoEm)
+    assert.equal(await saldoDe(unidade, produto), 10)
+    assert.lengthOf(gateway.estornos, 0)
+
+    const entrada = await MovimentacaoEstoque.query()
+      .where('pedidoId', pedido.id)
+      .where('tipo', 'ENTRADA')
+      .firstOrFail()
+    assert.containsSubset(entrada.toJSON(), {
+      usuarioId: cliente.id,
+      quantidade: 3,
+      saldoResultante: 10,
+      motivo: `Cancelamento do pedido ${pedido.codigo}`,
+    })
+  })
+
+  test('o cliente nao cancela o pedido ja pago', async ({ client, assert }) => {
+    const { pedido, cliente } = await pedidoNoStatus('PAGO', 'APROVADO')
+
+    const response = await cancelar(client, pedido, cliente)
+
+    response.assertStatus(403)
+    assert.equal(errorBody(response).error, 'SEM_PERMISSAO')
+    assert.equal(await statusPersistido(pedido), 'PAGO')
+    assert.lengthOf(gateway.estornos, 0)
+  })
+
+  test('o atendente cancela o pedido aguardando pagamento, mas nao o pago', async ({
+    client,
+    assert,
+  }) => {
+    const aguardando = await pedidoNoStatus('AGUARDANDO_PAGAMENTO')
+    const pago = await pedidoNoStatus('PAGO', 'APROVADO')
+
+    const cancelado = await cancelar(
+      client,
+      aguardando.pedido,
+      await equipeDe(aguardando.pedido, 'ATENDENTE')
+    )
+    const negado = await cancelar(client, pago.pedido, await equipeDe(pago.pedido, 'ATENDENTE'))
+
+    cancelado.assertStatus(200)
+    negado.assertStatus(403)
+    assert.equal(await statusPersistido(pago.pedido), 'PAGO')
+  })
+
+  test('com o pagamento pendente, o cancelamento responde 409', async ({ client, assert }) => {
+    const { pedido, unidade, produto } = await pedidoNoStatus('AGUARDANDO_PAGAMENTO', 'PENDENTE')
+
+    const response = await cancelar(client, pedido, await equipeDe(pedido, 'GERENTE'))
+
+    response.assertStatus(409)
+    assert.equal(errorBody(response).error, 'PAGAMENTO_EM_ANDAMENTO')
+    assert.equal(await statusPersistido(pedido), 'AGUARDANDO_PAGAMENTO')
+    assert.equal(await saldoDe(unidade, produto), 7)
+    assert.lengthOf(gateway.estornos, 0)
+  })
+
+  test('o gerente cancela o pedido pago: estorna no provedor e o estoque volta', async ({
+    client,
+    assert,
+  }) => {
+    const { pedido, unidade, produto } = await pedidoNoStatus('PAGO', 'APROVADO')
+
+    const response = await cancelar(client, pedido, await equipeDe(pedido, 'GERENTE'))
+
+    response.assertStatus(200)
+    assert.deepEqual(gateway.estornos, [
+      { chave: `estorno-${pedido.id}`, referenciaExterna: `pag_${pedido.id}` },
+    ])
+    const { data } = pedidoCriado(response)
+    assert.equal(data.status, 'CANCELADO')
+    assert.equal(data.pagamento?.status, 'ESTORNADO')
+    assert.equal(new Date(data.pagamento!.estornadoEm!).toISOString(), '2026-10-05T09:00:00.000Z')
+
+    const { pagamento } = await recarregado(pedido)
+    assert.equal(pagamento.status, 'ESTORNADO')
+    assert.equal(pagamento.estornadoEm?.toUTC().toISO(), '2026-10-05T09:00:00.000Z')
+    assert.containsSubset(pagamento.payloadEstorno, { status: 'ESTORNADO' })
+    assert.equal(await saldoDe(unidade, produto), 10)
+  })
+
+  test('cancelado em preparo ou pronto, estorna mas o estoque nao volta', async ({
+    client,
+    assert,
+  }) => {
+    for (const status of ['EM_PREPARO', 'PRONTO'] as const) {
+      const { pedido, unidade, produto } = await pedidoNoStatus(status, 'APROVADO')
+
+      const response = await cancelar(client, pedido, await equipeDe(pedido, 'GERENTE'))
+
+      response.assertStatus(200)
+      const { pagamento } = await recarregado(pedido)
+      assert.equal(pagamento.status, 'ESTORNADO', status)
+      assert.equal(await saldoDe(unidade, produto), 7, status)
+    }
+
+    assert.lengthOf(gateway.estornos, 2)
+  })
+
+  test('o admin cancela o pedido pago de qualquer unidade', async ({ client, assert }) => {
+    const { pedido } = await pedidoNoStatus('PAGO', 'APROVADO')
+
+    const response = await cancelar(client, pedido, await criarUsuario('ADMIN'))
+
+    response.assertStatus(200)
+    assert.equal(await statusPersistido(pedido), 'CANCELADO')
+  })
+
+  test('com o provedor fora do ar, responde 503 e nada muda', async ({ client, assert }) => {
+    const { pedido, unidade, produto } = await pedidoNoStatus('PAGO', 'APROVADO')
+    gateway.foraDoAr = true
+
+    const response = await cancelar(client, pedido, await equipeDe(pedido, 'GERENTE'))
+
+    response.assertStatus(503)
+    assert.equal(errorBody(response).error, 'GATEWAY_PAGAMENTO_INDISPONIVEL')
+    const salvo = await recarregado(pedido)
+    assert.equal(salvo.status, 'PAGO')
+    assert.equal(salvo.pagamento.status, 'APROVADO')
+    assert.isNull(salvo.motivoCancelamento)
+    assert.equal(await saldoDe(unidade, produto), 7)
+  })
+
+  test('o motivo e ignorado nas transicoes de avanco', async ({ client, assert }) => {
+    const { pedido } = await pedidoNoStatus('PAGO', 'APROVADO')
+
+    const response = await client
+      .patch(`/api/v1/pedidos/${pedido.id}/status`)
+      .json({ status: 'EM_PREPARO', motivo: 'Nao se aplica' })
+      .loginAs(await equipeDe(pedido, 'COZINHA'))
+
+    response.assertStatus(200)
+    const salvo = await recarregado(pedido)
+    assert.isNull(salvo.motivoCancelamento)
+  })
+
+  test('dois cancelamentos simultaneos: um cancela, o outro recebe 409, e o estorno nao duplica', async ({
+    client,
+    assert,
+  }) => {
+    const { pedido, unidade, produto } = await pedidoNoStatus('PAGO', 'APROVADO')
+    const gerente = await equipeDe(pedido, 'GERENTE')
+
+    const respostas = await comPedidoTravado(
+      pedido,
+      () => Promise.all([cancelar(client, pedido, gerente), cancelar(client, pedido, gerente)]),
+      async () => assert.equal(await statusPersistido(pedido), 'PAGO')
+    )
+
+    assert.sameMembers(
+      respostas.map((response) => response.status()),
+      [200, 409]
+    )
+    assert.deepEqual(
+      [...new Set(gateway.estornos.map((estorno) => estorno.chave))],
+      [`estorno-${pedido.id}`]
+    )
+    assert.equal(await saldoDe(unidade, produto), 10)
   })
 })
