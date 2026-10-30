@@ -7,6 +7,7 @@ import GatewayPagamentoHttp from '#services/gateway_pagamento_http'
 import type { SolicitacaoAoGateway } from '#services/gateway_pagamento'
 
 type Recebido = {
+  caminho: string | undefined
   cabecalhos: IncomingHttpHeaders
   corpo: Record<string, unknown>
 }
@@ -36,6 +37,13 @@ const PAGAMENTO_PENDENTE = {
   processadoEm: null,
 }
 
+const PAGAMENTO_ESTORNADO = {
+  ...PAGAMENTO_PENDENTE,
+  status: 'ESTORNADO',
+  processadoEm: '2026-10-04T12:01:00.000Z',
+  estornadoEm: '2026-10-05T09:00:00.000Z',
+}
+
 test.group('GatewayPagamentoHttp', (group) => {
   const recebidos: Recebido[] = []
   let roteiro: RespostaRoteirizada[] = []
@@ -45,7 +53,11 @@ test.group('GatewayPagamentoHttp', (group) => {
     let corpo = ''
     request.on('data', (parte) => (corpo += parte))
     request.on('end', () => {
-      recebidos.push({ cabecalhos: request.headers, corpo: JSON.parse(corpo) })
+      recebidos.push({
+        caminho: request.url,
+        cabecalhos: request.headers,
+        corpo: JSON.parse(corpo),
+      })
       const proxima = roteiro.shift() ?? { status: 201, corpo: PAGAMENTO_PENDENTE }
       response.statusCode = proxima.status
       response.setHeader('content-type', 'application/json')
@@ -159,6 +171,60 @@ test.group('GatewayPagamentoHttp', (group) => {
 
     const erro = await gateway()
       .solicitar('pagamento-42', SOLICITACAO)
+      .catch((falha) => falha)
+
+    assert.equal((erro as ApiException).status, 502)
+  })
+
+  test('pede o estorno do pagamento no provedor com a chave de idempotencia', async ({
+    assert,
+  }) => {
+    roteiro = [{ status: 201, corpo: PAGAMENTO_ESTORNADO }]
+
+    const { resposta, estorno } = await gateway().estornar('estorno-42', 'pag_1')
+
+    assert.lengthOf(recebidos, 1)
+    assert.equal(recebidos[0].caminho, '/pagamentos/pag_1/estorno')
+    assert.equal(recebidos[0].cabecalhos['idempotency-key'], 'estorno-42')
+    assert.deepEqual(resposta, PAGAMENTO_ESTORNADO)
+    assert.deepEqual(estorno, {
+      id: 'pag_1',
+      status: 'ESTORNADO',
+      estornadoEm: '2026-10-05T09:00:00.000Z',
+    })
+  })
+
+  test('repete o estorno com a mesma chave quando o provedor falha', async ({ assert }) => {
+    roteiro = [
+      { status: 503, corpo: {} },
+      { status: 200, corpo: PAGAMENTO_ESTORNADO },
+    ]
+
+    const { estorno } = await gateway(3).estornar('estorno-42', 'pag_1')
+
+    assert.equal(estorno.status, 'ESTORNADO')
+    assert.deepEqual(
+      recebidos.map((recebido) => recebido.cabecalhos['idempotency-key']),
+      ['estorno-42', 'estorno-42']
+    )
+  })
+
+  test('estorno recusado pelo provedor vira 502', async ({ assert }) => {
+    roteiro = [{ status: 409, corpo: { erro: { codigo: 'ESTORNO_NAO_PERMITIDO' } } }]
+
+    const erro = await gateway()
+      .estornar('estorno-42', 'pag_1')
+      .catch((falha) => falha)
+
+    assert.equal((erro as ApiException).status, 502)
+    assert.lengthOf(recebidos, 1)
+  })
+
+  test('estorno que nao volta ESTORNADO vira 502', async ({ assert }) => {
+    roteiro = [{ status: 201, corpo: PAGAMENTO_PENDENTE }]
+
+    const erro = await gateway()
+      .estornar('estorno-42', 'pag_1')
       .catch((falha) => falha)
 
     assert.equal((erro as ApiException).status, 502)

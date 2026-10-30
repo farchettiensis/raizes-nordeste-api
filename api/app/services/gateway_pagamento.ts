@@ -24,9 +24,25 @@ export type RespostaDoGateway = {
   pagamento: PagamentoNoGateway
 }
 
+export type EstornoNoGateway = {
+  id: string
+  status: 'ESTORNADO'
+  estornadoEm: string
+}
+
+export type RespostaDoEstorno = {
+  resposta: Record<string, unknown>
+  estorno: EstornoNoGateway
+}
+
 export abstract class GatewayPagamento {
   abstract solicitar(
     chaveIdempotencia: string,
     solicitacao: SolicitacaoAoGateway
   ): Promise<RespostaDoGateway>
+
+  abstract estornar(
+    chaveIdempotencia: string,
+    referenciaExterna: string
+  ): Promise<RespostaDoEstorno>
 }

@@ -6,7 +6,9 @@ import ApiException from '#exceptions/api_exception'
 import { METODOS_PAGAMENTO_EXTERNO } from '#models/pagamento'
 import {
   GatewayPagamento,
+  type EstornoNoGateway,
   type PagamentoNoGateway,
+  type RespostaDoEstorno,
   type RespostaDoGateway,
   type SolicitacaoAoGateway,
 } from '#services/gateway_pagamento'
@@ -20,6 +22,12 @@ const pagamentoNoGatewayValidator = vine.create({
   motivoRecusa: vine.string().nullable(),
   pix: vine.object({ copiaECola: vine.string() }).nullable(),
   processadoEm: vine.string().nullable(),
+})
+
+const estornoNoGatewayValidator = vine.create({
+  id: vine.string().minLength(1),
+  status: vine.enum(['ESTORNADO'] as const),
+  estornadoEm: vine.string(),
 })
 
 export type OpcoesDoGatewayHttp = {
@@ -76,6 +84,24 @@ export default class GatewayPagamentoHttp extends GatewayPagamento {
       return { requisicao, resposta, pagamento }
     } catch {
       throw respostaInesperada('corpo fora do contrato')
+    }
+  }
+
+  async estornar(chaveIdempotencia: string, referenciaExterna: string): Promise<RespostaDoEstorno> {
+    const resposta = await this.#comRetentativas(() =>
+      this.#enviar(
+        `/pagamentos/${encodeURIComponent(referenciaExterna)}/estorno`,
+        chaveIdempotencia,
+        {}
+      )
+    )
+
+    try {
+      const estorno: EstornoNoGateway = await estornoNoGatewayValidator.validate(resposta)
+
+      return { resposta, estorno }
+    } catch {
+      throw respostaInesperada('estorno fora do contrato')
     }
   }
 

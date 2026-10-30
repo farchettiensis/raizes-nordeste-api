@@ -1,6 +1,7 @@
 import ApiException from '#exceptions/api_exception'
 import {
   GatewayPagamento,
+  type RespostaDoEstorno,
   type RespostaDoGateway,
   type SolicitacaoAoGateway,
 } from '#services/gateway_pagamento'
@@ -10,12 +11,26 @@ export type Chamada = {
   solicitacao: SolicitacaoAoGateway
 }
 
+export type Estorno = {
+  chave: string
+  referenciaExterna: string
+}
+
+function indisponivel() {
+  return new ApiException('O provedor de pagamento nao respondeu. Tente novamente.', {
+    code: 'GATEWAY_PAGAMENTO_INDISPONIVEL',
+    status: 503,
+  })
+}
+
 export default class GatewayFalso extends GatewayPagamento {
   chamadas: Chamada[] = []
+  estornos: Estorno[] = []
   foraDoAr = false
 
   reiniciar() {
     this.chamadas = []
+    this.estornos = []
     this.foraDoAr = false
   }
 
@@ -23,10 +38,7 @@ export default class GatewayFalso extends GatewayPagamento {
     this.chamadas.push({ chave, solicitacao })
 
     if (this.foraDoAr) {
-      throw new ApiException('O provedor de pagamento nao respondeu. Tente novamente.', {
-        code: 'GATEWAY_PAGAMENTO_INDISPONIVEL',
-        status: 503,
-      })
+      throw indisponivel()
     }
 
     const pagamento = {
@@ -51,5 +63,21 @@ export default class GatewayFalso extends GatewayPagamento {
       resposta: { ...pagamento, descricao: solicitacao.descricao },
       pagamento,
     }
+  }
+
+  async estornar(chave: string, referenciaExterna: string): Promise<RespostaDoEstorno> {
+    this.estornos.push({ chave, referenciaExterna })
+
+    if (this.foraDoAr) {
+      throw indisponivel()
+    }
+
+    const estorno = {
+      id: referenciaExterna,
+      status: 'ESTORNADO' as const,
+      estornadoEm: '2026-10-05T09:00:00.000Z',
+    }
+
+    return { resposta: { ...estorno, referencia: referenciaExterna }, estorno }
   }
 }
