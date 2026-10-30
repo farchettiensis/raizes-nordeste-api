@@ -115,6 +115,27 @@ test.group('Auditoria do pedido', (group) => {
     assert.equal(registro.requestId, response.header('x-request-id'))
   })
 
+  test('um x-request-id longo enviado pelo cliente nao derruba a acao auditada', async ({
+    client,
+    assert,
+  }) => {
+    const { unidade, produto } = await unidadeComProduto()
+
+    const response = await client
+      .post('/api/v1/pedidos')
+      .header('x-request-id', 'x'.repeat(300))
+      .json({
+        unidadeId: unidade.id,
+        canalPedido: 'APP',
+        itens: [{ produtoId: produto.id, quantidade: 1 }],
+      })
+      .loginAs(await criarUsuario('CLIENTE'))
+
+    response.assertStatus(201)
+    const registro = await unicoRegistroDe('pedido.criado')
+    assert.equal(registro.requestId, 'x'.repeat(40))
+  })
+
   test('pedido recusado por falta de estoque nao deixa registro', async ({ client, assert }) => {
     const { unidade, produto } = await unidadeComProduto(1)
 

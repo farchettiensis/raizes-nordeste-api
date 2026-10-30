@@ -4,6 +4,8 @@ import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import LogAuditoria, { type AcaoAuditoria, type EntidadeAuditada } from '#models/log_auditoria'
 import type User from '#models/user'
 
+const TAMANHO_DO_REQUEST_ID = 40
+
 export type RegistroDeAuditoria = {
   acao: AcaoAuditoria
   entidade: EntidadeAuditada
@@ -22,11 +24,11 @@ export function registrarAuditoria(
     {
       acao,
       entidade,
-      entidadeId: entidadeId === undefined || entidadeId === null ? null : String(entidadeId),
+      entidadeId: entidadeId?.toString() ?? null,
       usuarioId: usuario?.id ?? null,
       dados: dados ?? null,
       ip: ctx?.request.ip() ?? null,
-      requestId: ctx?.request.id() ?? null,
+      requestId: ctx?.request.id()?.slice(0, TAMANHO_DO_REQUEST_ID) ?? null,
     },
     { client: trx }
   )
