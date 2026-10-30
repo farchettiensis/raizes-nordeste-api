@@ -317,8 +317,8 @@ Toda ação sensível deixa um registro em `logs_auditoria`, que a matriz consul
 | `auth.login`, `auth.logout` | entrada e saída |
 | `auth.login_negado` | senha errada ou e-mail desconhecido; aponta a conta alvo quando ela existe |
 | `pedido.criado` | criação do pedido, com unidade, canal e total |
-| `pedido.status_alterado` | toda mudança de status, inclusive as do webhook (com `usuarioId` nulo) |
-| `pedido.cancelado` | cancelamento, com o status de origem, o motivo, se houve estorno e se o estoque voltou |
+| `pedido.status_alterado` | todo avanço de status, inclusive a aprovação pelo webhook (com `usuarioId` nulo) |
+| `pedido.cancelado` | todo cancelamento, inclusive pela recusa do pagamento (com `usuarioId` nulo e o motivo da recusa), com o status de origem, o motivo, se houve estorno e se o estoque voltou |
 | `pagamento.solicitado`, `pagamento.aprovado`, `pagamento.recusado`, `pagamento.estornado` | ciclo do pagamento |
 | `acesso.negado` | qualquer `403` da API, com método, rota, parâmetros e código do erro |
 

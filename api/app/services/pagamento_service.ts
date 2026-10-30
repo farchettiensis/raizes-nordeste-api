@@ -13,6 +13,7 @@ import type User from '#models/user'
 import { registrarAuditoria } from '#services/auditoria'
 import { emCentavos } from '#services/centavos'
 import { GatewayPagamento } from '#services/gateway_pagamento'
+import { aplicarTransicao } from '#services/transicao_de_status'
 import { garantirPedidoVisivel } from '#services/escopo_de_acesso'
 import type { eventoDePagamentoValidator } from '#validators/pagamento'
 
@@ -205,17 +206,37 @@ export default class PagamentoService {
   }
 
   private async aprovar(pedido: Pedido, pagamento: Pagamento, resultado: Resultado) {
+    this.exigirTransicao(pedido, 'PAGO')
     await this.registrarResultado(pagamento, resultado)
-    await this.transicionar(pedido, 'PAGO', resultado.trx)
+    await aplicarTransicao(pedido, 'PAGO', null, resultado.trx)
   }
 
   private async recusar(pedido: Pedido, pagamento: Pagamento, resultado: Resultado) {
+    this.exigirTransicao(pedido, 'CANCELADO')
     await this.registrarResultado(pagamento, resultado)
-    pedido.canceladoEm = DateTime.now()
-    await this.transicionar(pedido, 'CANCELADO', resultado.trx)
+
+    const origem = pedido.status
+    pedido.merge({ status: 'CANCELADO', canceladoEm: DateTime.now() })
+    await pedido.save()
+
     await Estoque.devolverItensDe(
       pedido,
       { usuarioId: null, motivo: `Pagamento recusado do pedido ${pedido.codigo}` },
+      resultado.trx
+    )
+
+    await registrarAuditoria(
+      {
+        acao: 'pedido.cancelado',
+        entidade: 'pedido',
+        entidadeId: pedido.id,
+        dados: {
+          de: origem,
+          motivo: pagamento.motivoRecusa,
+          estornado: false,
+          estoqueDevolvido: true,
+        },
+      },
       resultado.trx
     )
   }
@@ -248,11 +269,7 @@ export default class PagamentoService {
     )
   }
 
-  private async transicionar(
-    pedido: Pedido,
-    destino: StatusPedido,
-    trx: TransactionClientContract
-  ) {
+  private exigirTransicao(pedido: Pedido, destino: StatusPedido) {
     if (!pedido.podeTransicionarPara(destino)) {
       throw new ApiException('O pedido nao pode receber este resultado de pagamento.', {
         code: 'TRANSICAO_DE_STATUS_INVALIDA',
@@ -260,19 +277,5 @@ export default class PagamentoService {
         details: [{ field: 'status', issue: `${pedido.status} para ${destino}` }],
       })
     }
-
-    const origem = pedido.status
-    pedido.status = destino
-    await pedido.save()
-
-    await registrarAuditoria(
-      {
-        acao: 'pedido.status_alterado',
-        entidade: 'pedido',
-        entidadeId: pedido.id,
-        dados: { de: origem, para: destino },
-      },
-      trx
-    )
   }
 }

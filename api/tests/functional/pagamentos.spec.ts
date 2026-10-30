@@ -797,7 +797,17 @@ test.group('Auditoria do pagamento', (group) => {
       usuarioId: null,
       dados: { pedidoId: pedido.id, eventoId: evento.id, motivoRecusa: MOTIVO },
     })
-    const [mudanca] = await registrosDe('pedido.status_alterado')
-    assert.deepEqual(mudanca.dados, { de: 'AGUARDANDO_PAGAMENTO', para: 'CANCELADO' })
+    const [cancelamento] = await registrosDe('pedido.cancelado')
+    assert.containsSubset(cancelamento.toJSON(), {
+      usuarioId: null,
+      entidadeId: String(pedido.id),
+      dados: {
+        de: 'AGUARDANDO_PAGAMENTO',
+        motivo: MOTIVO,
+        estornado: false,
+        estoqueDevolvido: true,
+      },
+    })
+    assert.lengthOf(await registrosDe('pedido.status_alterado'), 0)
   })
 })

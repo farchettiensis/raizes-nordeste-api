@@ -17,7 +17,11 @@ import {
   garantirPedidoVisivel,
   garantirUnidadeVinculada,
 } from '#services/escopo_de_acesso'
-import { garantirPerfilAutorizado, garantirTransicaoPermitida } from '#services/transicao_de_status'
+import {
+  aplicarTransicao,
+  garantirPerfilAutorizado,
+  garantirTransicaoPermitida,
+} from '#services/transicao_de_status'
 
 export type ItemSolicitado = {
   produtoId: number
@@ -84,20 +88,7 @@ export default class PedidoService {
       garantirTransicaoPermitida(visivel, destino)
       garantirPerfilAutorizado(visivel, usuario, destino)
 
-      const origem = visivel.status
-      visivel.status = destino
-      await visivel.save()
-
-      await registrarAuditoria(
-        {
-          acao: 'pedido.status_alterado',
-          entidade: 'pedido',
-          entidadeId: visivel.id,
-          usuario,
-          dados: { de: origem, para: destino },
-        },
-        trx
-      )
+      await aplicarTransicao(visivel, destino, usuario, trx)
 
       return visivel
     })

@@ -1,3 +1,5 @@
+import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
+
 import ApiException from '#exceptions/api_exception'
 import {
   STATUS_DEFINIDOS_PELA_OPERACAO,
@@ -6,6 +8,7 @@ import {
   type StatusPedido,
 } from '#models/pedido'
 import type User from '#models/user'
+import { registrarAuditoria } from '#services/auditoria'
 
 function destinosPossiveis(pedido: Pedido) {
   if (pedido.finalizado) {
@@ -37,4 +40,26 @@ export function garantirPerfilAutorizado(pedido: Pedido, usuario: User, destino:
       details: [{ field: 'status', issue: `${pedido.status} para ${destino}` }],
     })
   }
+}
+
+export async function aplicarTransicao(
+  pedido: Pedido,
+  destino: StatusPedido,
+  usuario: User | null,
+  trx: TransactionClientContract
+) {
+  const origem = pedido.status
+  pedido.status = destino
+  await pedido.save()
+
+  await registrarAuditoria(
+    {
+      acao: 'pedido.status_alterado',
+      entidade: 'pedido',
+      entidadeId: pedido.id,
+      usuario,
+      dados: { de: origem, para: destino },
+    },
+    trx
+  )
 }
