@@ -286,3 +286,65 @@ test.group('Auditoria da autenticacao', (group) => {
     assert.equal(registro.usuarioId, usuario.id)
   })
 })
+
+test.group('Auditoria de acessos negados', (group) => {
+  group.each.setup(() => testUtils.db().truncate())
+
+  test('perfil sem permissao na rota registra quem tentou, a rota e o erro', async ({
+    client,
+    assert,
+  }) => {
+    const unidade = await criarUnidade()
+    const cozinha = await criarUsuario('COZINHA', { unidadeId: unidade.id })
+
+    const response = await client
+      .post('/api/v1/pedidos')
+      .json({ unidadeId: 1, canalPedido: 'APP', itens: [{ produtoId: 1, quantidade: 1 }] })
+      .loginAs(cozinha)
+
+    response.assertStatus(403)
+    const registro = await unicoRegistroDe('acesso.negado')
+    assert.containsSubset(registro.toJSON(), {
+      usuarioId: cozinha.id,
+      entidade: 'rota',
+      entidadeId: null,
+      dados: { metodo: 'POST', rota: '/api/v1/pedidos', params: {}, erro: 'SEM_PERMISSAO' },
+      requestId: response.header('x-request-id'),
+    })
+  })
+
+  test('pedido fora do escopo registra a rota com o id pedido', async ({ client, assert }) => {
+    const { pedido } = await pedidoPago()
+    const outraUnidade = await criarUnidade()
+    const deOutraUnidade = await criarUsuario('ATENDENTE', { unidadeId: outraUnidade.id })
+
+    const response = await client.get(`/api/v1/pedidos/${pedido.id}`).loginAs(deOutraUnidade)
+
+    response.assertStatus(403)
+    const registro = await unicoRegistroDe('acesso.negado')
+    assert.deepEqual(registro.dados, {
+      metodo: 'GET',
+      rota: '/api/v1/pedidos/:id',
+      params: { id: pedido.id },
+      erro: 'SEM_PERMISSAO',
+    })
+  })
+
+  test('perfil de unidade sem unidade vinculada tambem fica registrado', async ({
+    client,
+    assert,
+  }) => {
+    const response = await client.get('/api/v1/pedidos').loginAs(await criarUsuario('GERENTE'))
+
+    response.assertStatus(403)
+    const registro = await unicoRegistroDe('acesso.negado')
+    assert.equal(registro.dados.erro, 'SEM_UNIDADE_VINCULADA')
+  })
+
+  test('requisicao sem token nao gera registro', async ({ client, assert }) => {
+    const response = await client.get('/api/v1/pedidos')
+
+    response.assertStatus(401)
+    assert.lengthOf(await registrosDe('acesso.negado'), 0)
+  })
+})

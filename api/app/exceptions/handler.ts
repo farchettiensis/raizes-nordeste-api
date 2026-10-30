@@ -1,7 +1,9 @@
 import app from '@adonisjs/core/services/app'
+import logger from '@adonisjs/core/services/logger'
 import { type HttpContext, ExceptionHandler } from '@adonisjs/core/http'
 
 import ApiException, { type ErrorDetail } from '#exceptions/api_exception'
+import { registrarAuditoria } from '#services/auditoria'
 
 type ErrorBody = {
   error: string
@@ -122,10 +124,33 @@ export default class HttpExceptionHandler extends ExceptionHandler {
 
   async handle(error: unknown, ctx: HttpContext) {
     const status = this.statusFor(error)
+    const body = this.buildBody(error, ctx, status)
+
+    if (status === 403) {
+      await this.auditarAcessoNegado(ctx, body.error)
+    }
 
     ctx.response.status(status)
 
-    return ctx.response.send(this.buildBody(error, ctx, status))
+    return ctx.response.send(body)
+  }
+
+  protected async auditarAcessoNegado(ctx: HttpContext, erro: string) {
+    try {
+      await registrarAuditoria({
+        acao: 'acesso.negado',
+        entidade: 'rota',
+        usuario: ctx.auth?.user,
+        dados: {
+          metodo: ctx.request.method(),
+          rota: ctx.route?.pattern ?? ctx.request.url(),
+          params: ctx.params,
+          erro,
+        },
+      })
+    } catch (falha) {
+      logger.error({ err: falha, requestId: ctx.request.id() }, 'Acesso negado nao auditado')
+    }
   }
 
   async report(error: unknown, ctx: HttpContext) {
