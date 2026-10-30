@@ -1,4 +1,5 @@
 import { HttpContext } from '@adonisjs/core/http'
+import logger from '@adonisjs/core/services/logger'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 
 import LogAuditoria, { type AcaoAuditoria, type EntidadeAuditada } from '#models/log_auditoria'
@@ -32,4 +33,12 @@ export function registrarAuditoria(
     },
     { client: trx }
   )
+}
+
+export async function registrarAuditoriaSemInterromper(registro: RegistroDeAuditoria) {
+  try {
+    await registrarAuditoria(registro)
+  } catch (falha) {
+    logger.error({ err: falha, acao: registro.acao }, 'Registro de auditoria nao gravado')
+  }
 }

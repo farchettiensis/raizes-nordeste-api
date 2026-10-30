@@ -1,5 +1,5 @@
 import User from '#models/user'
-import { registrarAuditoria } from '#services/auditoria'
+import { registrarAuditoria, registrarAuditoriaSemInterromper } from '#services/auditoria'
 import { loginValidator } from '#validators/user'
 import type { HttpContext } from '@adonisjs/core/http'
 import { errors } from '@adonisjs/auth'
@@ -10,7 +10,6 @@ export default class AccessTokensController {
     const { email, password } = await request.validateUsing(loginValidator)
 
     const user = await this.verificar(email, password)
-    const token = await User.accessTokens.create(user)
 
     await registrarAuditoria({
       acao: 'auth.login',
@@ -18,6 +17,8 @@ export default class AccessTokensController {
       entidadeId: user.id,
       usuario: user,
     })
+
+    const token = await User.accessTokens.create(user)
 
     return serialize({
       user: UserTransformer.transform(user),
@@ -27,9 +28,6 @@ export default class AccessTokensController {
 
   async destroy({ auth }: HttpContext) {
     const user = auth.getUserOrFail()
-    if (user.currentAccessToken) {
-      await User.accessTokens.delete(user, user.currentAccessToken.identifier)
-    }
 
     await registrarAuditoria({
       acao: 'auth.logout',
@@ -37,6 +35,10 @@ export default class AccessTokensController {
       entidadeId: user.id,
       usuario: user,
     })
+
+    if (user.currentAccessToken) {
+      await User.accessTokens.delete(user, user.currentAccessToken.identifier)
+    }
 
     return {
       message: 'Logged out successfully',
@@ -48,8 +50,8 @@ export default class AccessTokensController {
       return await User.verifyCredentials(email, password)
     } catch (erro) {
       if (erro instanceof errors.E_INVALID_CREDENTIALS) {
-        const alvo = await User.findBy('email', email)
-        await registrarAuditoria({
+        const alvo = await User.findBy('email', email).catch(() => null)
+        await registrarAuditoriaSemInterromper({
           acao: 'auth.login_negado',
           entidade: 'user',
           entidadeId: alvo?.id,
