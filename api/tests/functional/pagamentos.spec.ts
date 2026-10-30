@@ -5,6 +5,7 @@ import testUtils from '@adonisjs/core/services/test_utils'
 
 import pagamentoConfig from '#config/pagamento'
 import Estoque from '#models/estoque'
+import LogAuditoria from '#models/log_auditoria'
 import MovimentacaoEstoque from '#models/movimentacao_estoque'
 import Pagamento from '#models/pagamento'
 import type Pedido from '#models/pedido'
@@ -713,5 +714,90 @@ test.group('Webhook de pagamento', (group) => {
     respostas.forEach((response) => response.assertStatus(204))
     assert.equal(await saldoDe(unidade, tapioca), 10)
     assert.lengthOf(await MovimentacaoEstoque.query().where('tipo', 'ENTRADA'), 2)
+  })
+})
+
+test.group('Auditoria do pagamento', (group) => {
+  group.setup(() => {
+    app.container.swap(GatewayPagamento, () => gateway)
+
+    return () => app.container.restore(GatewayPagamento)
+  })
+
+  group.each.setup(() => {
+    gateway.reiniciar()
+
+    return testUtils.db().truncate()
+  })
+
+  function registrosDe(acao: string) {
+    return LogAuditoria.query().where('acao', acao).orderBy('id')
+  }
+
+  test('solicitar registra o pagamento uma vez, mesmo com a repeticao idempotente', async ({
+    client,
+    assert,
+  }) => {
+    const cliente = await criarUsuario('CLIENTE')
+    const pedido = await pedidoDe(cliente)
+    const solicitar = () =>
+      client.post(`/api/v1/pedidos/${pedido.id}/pagamento`).json({ metodo: 'PIX' }).loginAs(cliente)
+
+    const primeira = await solicitar()
+    await solicitar()
+
+    const registros = await registrosDe('pagamento.solicitado')
+    assert.lengthOf(registros, 1)
+    assert.containsSubset(registros[0].toJSON(), {
+      usuarioId: cliente.id,
+      entidade: 'pagamento',
+      entidadeId: String(pagamentoRespondido(primeira).data.pagamentoId),
+      dados: { pedidoId: pedido.id, metodo: 'PIX', valor: '51.80' },
+    })
+  })
+
+  test('aprovacao registra o resultado e a mudanca do pedido, sem usuario', async ({
+    client,
+    assert,
+  }) => {
+    const cliente = await criarUsuario('CLIENTE')
+    const pedido = await pedidoDe(cliente)
+    const pagamento = await pagamentoPendente(cliente, pedido)
+    const evento = eventoPara(pagamento, 'APROVADO')
+
+    await enviarWebhook(client, evento)
+    await enviarWebhook(client, evento)
+
+    const aprovacoes = await registrosDe('pagamento.aprovado')
+    assert.lengthOf(aprovacoes, 1)
+    assert.containsSubset(aprovacoes[0].toJSON(), {
+      usuarioId: null,
+      entidadeId: String(pagamento.id),
+      dados: { pedidoId: pedido.id, eventoId: evento.id },
+    })
+    const mudancas = await registrosDe('pedido.status_alterado')
+    assert.lengthOf(mudancas, 1)
+    assert.containsSubset(mudancas[0].toJSON(), {
+      usuarioId: null,
+      entidadeId: String(pedido.id),
+      dados: { de: 'AGUARDANDO_PAGAMENTO', para: 'PAGO' },
+    })
+  })
+
+  test('recusa registra o motivo e o cancelamento do pedido', async ({ client, assert }) => {
+    const cliente = await criarUsuario('CLIENTE')
+    const pedido = await pedidoDe(cliente)
+    const pagamento = await pagamentoPendente(cliente, pedido)
+    const evento = eventoPara(pagamento, 'RECUSADO')
+
+    await enviarWebhook(client, evento)
+
+    const [recusa] = await registrosDe('pagamento.recusado')
+    assert.containsSubset(recusa.toJSON(), {
+      usuarioId: null,
+      dados: { pedidoId: pedido.id, eventoId: evento.id, motivoRecusa: MOTIVO },
+    })
+    const [mudanca] = await registrosDe('pedido.status_alterado')
+    assert.deepEqual(mudanca.dados, { de: 'AGUARDANDO_PAGAMENTO', para: 'CANCELADO' })
   })
 })

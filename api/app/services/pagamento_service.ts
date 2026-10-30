@@ -10,6 +10,7 @@ import Estoque from '#models/estoque'
 import Pagamento, { type MetodoPagamentoExterno } from '#models/pagamento'
 import Pedido, { type StatusPedido } from '#models/pedido'
 import type User from '#models/user'
+import { registrarAuditoria } from '#services/auditoria'
 import { emCentavos } from '#services/centavos'
 import { GatewayPagamento } from '#services/gateway_pagamento'
 import { garantirPedidoVisivel } from '#services/escopo_de_acesso'
@@ -32,7 +33,7 @@ export default class PagamentoService {
       const travado = await this.travarPedido(cliente, pedidoId, trx)
       this.exigirAguardandoPagamento(travado)
 
-      return { pedido: travado, pagamento: await this.pagamentoDo(travado, metodo, trx) }
+      return { pedido: travado, pagamento: await this.pagamentoDo(travado, cliente, metodo, trx) }
     })
 
     if (!pagamento.referenciaExterna) {
@@ -69,16 +70,14 @@ export default class PagamentoService {
 
   private async pagamentoDo(
     pedido: Pedido,
+    cliente: User,
     metodo: MetodoPagamentoExterno,
     trx: TransactionClientContract
   ) {
     const existente = await Pagamento.query({ client: trx }).where('pedidoId', pedido.id).first()
 
     if (!existente) {
-      return Pagamento.create(
-        { pedidoId: pedido.id, metodo, valor: pedido.total, status: 'PENDENTE' },
-        { client: trx }
-      )
+      return this.criarPagamento(pedido, cliente, metodo, trx)
     }
 
     if (existente.metodo !== metodo) {
@@ -90,6 +89,31 @@ export default class PagamentoService {
     }
 
     return existente
+  }
+
+  private async criarPagamento(
+    pedido: Pedido,
+    cliente: User,
+    metodo: MetodoPagamentoExterno,
+    trx: TransactionClientContract
+  ) {
+    const pagamento = await Pagamento.create(
+      { pedidoId: pedido.id, metodo, valor: pedido.total, status: 'PENDENTE' },
+      { client: trx }
+    )
+
+    await registrarAuditoria(
+      {
+        acao: 'pagamento.solicitado',
+        entidade: 'pagamento',
+        entidadeId: pagamento.id,
+        usuario: cliente,
+        dados: { pedidoId: pedido.id, metodo, valor: pagamento.valor },
+      },
+      trx
+    )
+
+    return pagamento
   }
 
   private async enviarAoGateway(pedido: Pedido, pagamento: Pagamento) {
@@ -182,13 +206,13 @@ export default class PagamentoService {
 
   private async aprovar(pedido: Pedido, pagamento: Pagamento, resultado: Resultado) {
     await this.registrarResultado(pagamento, resultado)
-    await this.transicionar(pedido, 'PAGO')
+    await this.transicionar(pedido, 'PAGO', resultado.trx)
   }
 
   private async recusar(pedido: Pedido, pagamento: Pagamento, resultado: Resultado) {
     await this.registrarResultado(pagamento, resultado)
     pedido.canceladoEm = DateTime.now()
-    await this.transicionar(pedido, 'CANCELADO')
+    await this.transicionar(pedido, 'CANCELADO', resultado.trx)
     await Estoque.devolverItensDe(
       pedido,
       { usuarioId: null, motivo: `Pagamento recusado do pedido ${pedido.codigo}` },
@@ -196,7 +220,7 @@ export default class PagamentoService {
     )
   }
 
-  private async registrarResultado(pagamento: Pagamento, { evento, payload }: Resultado) {
+  private async registrarResultado(pagamento: Pagamento, { evento, payload, trx }: Resultado) {
     const processadoEm = DateTime.fromISO(evento.pagamento.processadoEm)
 
     pagamento.merge({
@@ -208,9 +232,27 @@ export default class PagamentoService {
     })
 
     await pagamento.save()
+
+    await registrarAuditoria(
+      {
+        acao: evento.pagamento.status === 'APROVADO' ? 'pagamento.aprovado' : 'pagamento.recusado',
+        entidade: 'pagamento',
+        entidadeId: pagamento.id,
+        dados: {
+          pedidoId: pagamento.pedidoId,
+          eventoId: evento.id,
+          ...(pagamento.motivoRecusa ? { motivoRecusa: pagamento.motivoRecusa } : {}),
+        },
+      },
+      trx
+    )
   }
 
-  private async transicionar(pedido: Pedido, destino: StatusPedido) {
+  private async transicionar(
+    pedido: Pedido,
+    destino: StatusPedido,
+    trx: TransactionClientContract
+  ) {
     if (!pedido.podeTransicionarPara(destino)) {
       throw new ApiException('O pedido nao pode receber este resultado de pagamento.', {
         code: 'TRANSICAO_DE_STATUS_INVALIDA',
@@ -219,7 +261,18 @@ export default class PagamentoService {
       })
     }
 
+    const origem = pedido.status
     pedido.status = destino
     await pedido.save()
+
+    await registrarAuditoria(
+      {
+        acao: 'pedido.status_alterado',
+        entidade: 'pedido',
+        entidadeId: pedido.id,
+        dados: { de: origem, para: destino },
+      },
+      trx
+    )
   }
 }
