@@ -7,10 +7,8 @@ import { DateTime } from 'luxon'
 
 import ApiException from '#exceptions/api_exception'
 import Estoque from '#models/estoque'
-import MovimentacaoEstoque from '#models/movimentacao_estoque'
 import Pagamento, { type MetodoPagamentoExterno } from '#models/pagamento'
 import Pedido, { type StatusPedido } from '#models/pedido'
-import PedidoItem from '#models/pedido_item'
 import type User from '#models/user'
 import { emCentavos } from '#services/centavos'
 import { GatewayPagamento } from '#services/gateway_pagamento'
@@ -191,7 +189,11 @@ export default class PagamentoService {
     await this.registrarResultado(pagamento, resultado)
     pedido.canceladoEm = DateTime.now()
     await this.transicionar(pedido, 'CANCELADO')
-    await this.devolverEstoque(pedido, resultado.trx)
+    await Estoque.devolverItensDe(
+      pedido,
+      { usuarioId: null, motivo: `Pagamento recusado do pedido ${pedido.codigo}` },
+      resultado.trx
+    )
   }
 
   private async registrarResultado(pagamento: Pagamento, { evento, payload }: Resultado) {
@@ -219,34 +221,5 @@ export default class PagamentoService {
 
     pedido.status = destino
     await pedido.save()
-  }
-
-  private async devolverEstoque(pedido: Pedido, trx: TransactionClientContract) {
-    const itens = await PedidoItem.query({ client: trx }).where('pedidoId', pedido.id)
-    const estoques = await Estoque.travarDaUnidade(
-      pedido.unidadeId,
-      itens.map((item) => item.produtoId),
-      trx
-    )
-    const porProduto = new Map(estoques.map((estoque) => [estoque.produtoId, estoque]))
-
-    for (const item of itens) {
-      const estoque = porProduto.get(item.produtoId)!
-      estoque.quantidade += item.quantidade
-      await estoque.save()
-
-      await MovimentacaoEstoque.create(
-        {
-          estoqueId: estoque.id,
-          pedidoId: pedido.id,
-          usuarioId: null,
-          tipo: 'ENTRADA',
-          quantidade: item.quantidade,
-          saldoResultante: estoque.quantidade,
-          motivo: `Pagamento recusado do pedido ${pedido.codigo}`,
-        },
-        { client: trx }
-      )
-    }
   }
 }
