@@ -37,6 +37,7 @@ type PagamentoRespondido = {
     motivoRecusa: string | null
     pix: { copiaECola: string } | null
     processadoEm: string | null
+    estornadoEm: string | null
     createdAt: string
   }
 }
@@ -196,6 +197,7 @@ test.group('Solicitacao de pagamento', (group) => {
       motivoRecusa: null,
       pix: { copiaECola: `PIX-MOCK-${data.pagamentoId}` },
       processadoEm: null,
+      estornadoEm: null,
     })
 
     assert.deepEqual(gateway.chamadas, [

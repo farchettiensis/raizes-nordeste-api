@@ -149,16 +149,20 @@ export class MovimentacoesEstoqueSchema extends BaseModel {
 }
 
 export class PagamentoSchema extends BaseModel {
-  static $columns = ['createdAt', 'id', 'metodo', 'motivoRecusa', 'payloadRequisicao', 'payloadResposta', 'payloadWebhook', 'pedidoId', 'processadoEm', 'referenciaExterna', 'status', 'updatedAt', 'valor'] as const
+  static $columns = ['createdAt', 'estornadoEm', 'id', 'metodo', 'motivoRecusa', 'payloadEstorno', 'payloadRequisicao', 'payloadResposta', 'payloadWebhook', 'pedidoId', 'processadoEm', 'referenciaExterna', 'status', 'updatedAt', 'valor'] as const
   $columns = PagamentoSchema.$columns
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
+  @column.dateTime()
+  declare estornadoEm: DateTime | null
   @column({ isPrimary: true })
   declare id: number
   @column()
   declare metodo: MetodoPagamento
   @column()
   declare motivoRecusa: string | null
+  @column()
+  declare payloadEstorno: any | null
   @column()
   declare payloadRequisicao: any | null
   @column()
@@ -203,7 +207,7 @@ export class PedidoItenSchema extends BaseModel {
 }
 
 export class PedidoSchema extends BaseModel {
-  static $columns = ['canalPedido', 'canceladoEm', 'clienteId', 'codigo', 'createdAt', 'desconto', 'id', 'observacoes', 'pontosGerados', 'status', 'subtotal', 'total', 'unidadeId', 'updatedAt'] as const
+  static $columns = ['canalPedido', 'canceladoEm', 'clienteId', 'codigo', 'createdAt', 'desconto', 'id', 'motivoCancelamento', 'observacoes', 'pontosGerados', 'status', 'subtotal', 'total', 'unidadeId', 'updatedAt'] as const
   $columns = PedidoSchema.$columns
   @column()
   declare canalPedido: CanalPedido
@@ -219,6 +223,8 @@ export class PedidoSchema extends BaseModel {
   declare desconto: string
   @column({ isPrimary: true })
   declare id: number
+  @column()
+  declare motivoCancelamento: string | null
   @column()
   declare observacoes: string | null
   @column()

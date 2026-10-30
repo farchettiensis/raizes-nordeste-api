@@ -603,6 +603,7 @@ test.group('Consulta de pedido', (group) => {
       total: '37.00',
       pagamento: null,
       canceladoEm: null,
+      motivoCancelamento: null,
     })
     assert.lengthOf(data.itens, 1)
   })

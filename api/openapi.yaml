@@ -814,6 +814,7 @@ components:
           total,
           itens,
           canceladoEm,
+          motivoCancelamento,
           createdAt,
         ]
       properties:
@@ -858,6 +859,11 @@ components:
           nullable: true
           description: Quando o pedido foi cancelado; nulo enquanto nao for
           example: null
+        motivoCancelamento:
+          type: string
+          nullable: true
+          description: Informado por quem cancelou; nulo na recusa do pagamento, cujo motivo esta em pagamento.motivoRecusa
+          example: null
         createdAt:
           type: string
           format: date-time
@@ -894,6 +900,7 @@ components:
           motivoRecusa,
           pix,
           processadoEm,
+          estornadoEm,
           createdAt,
         ]
       properties:
@@ -935,6 +942,12 @@ components:
           type: string
           format: date-time
           nullable: true
+          example: null
+        estornadoEm:
+          type: string
+          format: date-time
+          nullable: true
+          description: Quando o provedor estornou o pagamento, no cancelamento de um pedido pago
           example: null
         createdAt:
           type: string

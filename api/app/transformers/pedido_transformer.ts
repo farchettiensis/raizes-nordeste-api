@@ -14,6 +14,7 @@ export default class PedidoTransformer extends BaseTransformer<Pedido> {
       desconto,
       total,
       canceladoEm,
+      motivoCancelamento,
       createdAt,
     } = this.resource
 
@@ -35,6 +36,7 @@ export default class PedidoTransformer extends BaseTransformer<Pedido> {
       })),
       pagamento: PagamentoTransformer.transform(this.whenLoaded(this.resource.pagamento)),
       canceladoEm: canceladoEm?.toISO() ?? null,
+      motivoCancelamento: motivoCancelamento ?? null,
       createdAt: createdAt.toISO(),
     }
   }

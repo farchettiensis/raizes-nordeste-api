@@ -15,6 +15,7 @@ export default class PagamentoTransformer extends BaseTransformer<Pagamento> {
       motivoRecusa: motivoRecusa ?? null,
       pix: this.resource.pixCopiaECola ? { copiaECola: this.resource.pixCopiaECola } : null,
       processadoEm: this.resource.processadoEm?.toISO() ?? null,
+      estornadoEm: this.resource.estornadoEm?.toISO() ?? null,
       createdAt: this.resource.createdAt.toISO(),
     }
   }
