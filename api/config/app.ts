@@ -9,7 +9,7 @@ export const http = defineConfig({
 
   allowMethodSpoofing: false,
 
-  useAsyncLocalStorage: false,
+  useAsyncLocalStorage: true,
 
   redirect: {
     forwardQueryString: true,

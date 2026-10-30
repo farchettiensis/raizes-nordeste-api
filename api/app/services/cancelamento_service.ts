@@ -8,6 +8,7 @@ import Estoque from '#models/estoque'
 import Pagamento from '#models/pagamento'
 import Pedido from '#models/pedido'
 import type User from '#models/user'
+import { registrarAuditoria } from '#services/auditoria'
 import { garantirPedidoVisivel } from '#services/escopo_de_acesso'
 import { GatewayPagamento, type RespostaDoEstorno } from '#services/gateway_pagamento'
 import { garantirPerfilAutorizado, garantirTransicaoPermitida } from '#services/transicao_de_status'
@@ -35,10 +36,14 @@ export default class CancelamentoService {
           throw pagamentoEmAndamento()
         }
 
-        await this.registrarEstorno(travado.pagamento, estorno)
+        await this.registrarEstorno(travado.pagamento, estorno, usuario, trx)
       }
 
-      await this.registrarCancelamento(travado.pedido, usuario, motivo, trx)
+      await this.registrarCancelamento(
+        travado.pedido,
+        { usuario, motivo, estornado: estorno !== null },
+        trx
+      )
 
       return travado.pedido
     })
@@ -75,7 +80,12 @@ export default class CancelamentoService {
     return this.gateway.estornar(`estorno-${pedido.id}`, pagamento.referenciaExterna!)
   }
 
-  private async registrarEstorno(pagamento: Pagamento, { resposta, estorno }: RespostaDoEstorno) {
+  private async registrarEstorno(
+    pagamento: Pagamento,
+    { resposta, estorno }: RespostaDoEstorno,
+    usuario: User,
+    trx: TransactionClientContract
+  ) {
     const estornadoEm = DateTime.fromISO(estorno.estornadoEm)
 
     pagamento.merge({
@@ -85,15 +95,28 @@ export default class CancelamentoService {
     })
 
     await pagamento.save()
+
+    await registrarAuditoria(
+      {
+        acao: 'pagamento.estornado',
+        entidade: 'pagamento',
+        entidadeId: pagamento.id,
+        usuario,
+        dados: { pedidoId: pagamento.pedidoId },
+      },
+      trx
+    )
   }
 
   private async registrarCancelamento(
     pedido: Pedido,
-    usuario: User,
-    motivo: string,
+    { usuario, motivo, estornado }: { usuario: User; motivo: string; estornado: boolean },
     trx: TransactionClientContract
   ) {
-    if (pedido.devolveEstoqueAoCancelar) {
+    const origem = pedido.status
+    const estoqueDevolvido = pedido.devolveEstoqueAoCancelar
+
+    if (estoqueDevolvido) {
       await Estoque.devolverItensDe(
         pedido,
         { usuarioId: usuario.id, motivo: `Cancelamento do pedido ${pedido.codigo}` },
@@ -103,5 +126,16 @@ export default class CancelamentoService {
 
     pedido.merge({ status: 'CANCELADO', canceladoEm: DateTime.now(), motivoCancelamento: motivo })
     await pedido.save()
+
+    await registrarAuditoria(
+      {
+        acao: 'pedido.cancelado',
+        entidade: 'pedido',
+        entidadeId: pedido.id,
+        usuario,
+        dados: { de: origem, motivo, estornado, estoqueDevolvido },
+      },
+      trx
+    )
   }
 }

@@ -32,6 +32,12 @@ export default {
         metodo: enumColumn('MetodoPagamento', '#models/pagamento'),
       },
     },
+    logs_auditoria: {
+      columns: {
+        acao: enumColumn('AcaoAuditoria', '#models/log_auditoria'),
+        entidade: enumColumn('EntidadeAuditada', '#models/log_auditoria'),
+      },
+    },
     movimentacoes_estoque: {
       columns: {
         tipo: enumColumn('TipoMovimentacaoEstoque', '#models/movimentacao_estoque'),

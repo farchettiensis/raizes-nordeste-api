@@ -7,6 +7,7 @@
 import { BaseModel, column } from '@adonisjs/lucid/orm'
 import { DateTime } from 'luxon'
 import type { TipoMovimentoFidelidade } from '#models/fidelidade_movimento'
+import type { AcaoAuditoria, EntidadeAuditada } from '#models/log_auditoria'
 import type { TipoMovimentacaoEstoque } from '#models/movimentacao_estoque'
 import type { MetodoPagamento, StatusPagamento } from '#models/pagamento'
 import type { CanalPedido, StatusPedido } from '#models/pedido'
@@ -102,13 +103,13 @@ export class LogsAuditoriaSchema extends BaseModel {
   static $columns = ['acao', 'createdAt', 'dados', 'entidade', 'entidadeId', 'id', 'ip', 'requestId', 'updatedAt', 'usuarioId'] as const
   $columns = LogsAuditoriaSchema.$columns
   @column()
-  declare acao: string
+  declare acao: AcaoAuditoria
   @column.dateTime({ autoCreate: true })
   declare createdAt: DateTime
   @column()
   declare dados: any | null
   @column()
-  declare entidade: string
+  declare entidade: EntidadeAuditada
   @column()
   declare entidadeId: string | null
   @column({ isPrimary: true })

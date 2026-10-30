@@ -10,6 +10,7 @@ import Pedido, { type CanalPedido, type StatusPedido } from '#models/pedido'
 import Unidade from '#models/unidade'
 import UnidadeProduto from '#models/unidade_produto'
 import type User from '#models/user'
+import { registrarAuditoria } from '#services/auditoria'
 import { emCentavos, emReais } from '#services/centavos'
 import {
   garantirAcessoAUnidade,
@@ -83,8 +84,20 @@ export default class PedidoService {
       garantirTransicaoPermitida(visivel, destino)
       garantirPerfilAutorizado(visivel, usuario, destino)
 
+      const origem = visivel.status
       visivel.status = destino
       await visivel.save()
+
+      await registrarAuditoria(
+        {
+          acao: 'pedido.status_alterado',
+          entidade: 'pedido',
+          entidadeId: visivel.id,
+          usuario,
+          dados: { de: origem, para: destino },
+        },
+        trx
+      )
 
       return visivel
     })
@@ -255,6 +268,22 @@ export default class PedidoService {
     )
 
     await this.baixarEstoque(pedido, cliente, dados.itens, estoques, trx)
+
+    await registrarAuditoria(
+      {
+        acao: 'pedido.criado',
+        entidade: 'pedido',
+        entidadeId: pedido.id,
+        usuario: cliente,
+        dados: {
+          unidadeId: pedido.unidadeId,
+          canalPedido: pedido.canalPedido,
+          total: pedido.total,
+          itens: itens.length,
+        },
+      },
+      trx
+    )
 
     return pedido
   }
