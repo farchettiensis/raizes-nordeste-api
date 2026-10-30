@@ -143,7 +143,7 @@ O Swagger em `/docs` traz os exemplos de request e response de cada um. Esta tab
 | GET | `/api/v1/pedidos` | token, pedidos no escopo do usuário | Lista pedidos, filtrando por `canalPedido`, `status` e `unidadeId` |
 | POST | `/api/v1/pedidos` | token, perfil CLIENTE | Cria o pedido validando cardápio e estoque da unidade |
 | GET | `/api/v1/pedidos/:id` | token, pedido no escopo do usuário | Pedido com itens e pagamento |
-| PATCH | `/api/v1/pedidos/:id/status` | token, perfil da transição, pedido no escopo | Avança o pedido da cozinha ao balcão |
+| PATCH | `/api/v1/pedidos/:id/status` | token, perfil da transição, pedido no escopo | Avança o pedido da cozinha ao balcão ou o cancela |
 | POST | `/api/v1/pedidos/:id/pagamento` | token, perfil CLIENTE, dono do pedido | Solicita o pagamento ao provedor externo |
 | POST | `/api/v1/pagamentos/webhook` | assinatura HMAC do provedor | Recebe o resultado do pagamento |
 
@@ -279,13 +279,32 @@ Depois de pago, o pedido avança por `PATCH /api/v1/pedidos/:id/status` com `{ "
 | `PAGO` → `EM_PREPARO` | COZINHA, GERENTE |
 | `EM_PREPARO` → `PRONTO` | COZINHA, GERENTE |
 | `PRONTO` → `ENTREGUE` | ATENDENTE, GERENTE |
+| `AGUARDANDO_PAGAMENTO` → `CANCELADO` | CLIENTE dono, ATENDENTE, GERENTE, ADMIN |
+| `PAGO`, `EM_PREPARO` ou `PRONTO` → `CANCELADO` | GERENTE, ADMIN |
 
-- **Cada um no seu posto.** A cozinha começa e termina o preparo, o balcão entrega, e o gerente cobre os dois. ADMIN enxerga todos os pedidos mas não avança nenhum: a matriz não está na cozinha nem no balcão.
+- **Cada um no seu posto.** A cozinha começa e termina o preparo, o balcão entrega, e o gerente cobre os dois. ADMIN enxerga todos os pedidos e pode cancelá-los, mas não avança nenhum: a matriz não está na cozinha nem no balcão.
 - **`PAGO` não é aceito no corpo** (`422`). Só o webhook do provedor marca o pedido como pago.
 - **A ordem das checagens** é existência (`404`), escopo (`403`), transição prevista no ciclo de vida (`409 TRANSICAO_DE_STATUS_INVALIDA`, com os destinos possíveis em `details`) e perfil (`403 SEM_PERMISSAO`). A transição vem antes do perfil para que um pedido `ENTREGUE` responda `409` a qualquer um, o que descreve melhor o problema.
 - **Transições simultâneas não se somam.** O pedido é travado com `SELECT ... FOR UPDATE` durante as checagens e a gravação. Se a cozinha toca duas vezes em "iniciar preparo", o segundo toque espera o primeiro, encontra o pedido já `EM_PREPARO` e recebe `409`. Há um teste para isso, e sem a trava os dois são aceitos.
 
-Limitação conhecida: não há volta de status. Um toque errado (marcar como pronto antes da hora) não se desfaz, o que preserva o histórico do pedido mas exige cuidado na operação.
+### Cancelamento
+
+O cancelamento usa a mesma rota, com motivo obrigatório: `{ "status": "CANCELADO", "motivo": "Cliente desistiu no balcão" }`. Antes de pago, o próprio cliente ou o balcão podem cancelar; depois de pago, há dinheiro a devolver, e só o gerente ou a matriz decidem. As regras, na ordem:
+
+1. **Pagamento `PENDENTE` bloqueia** (`409 PAGAMENTO_EM_ANDAMENTO`). Se o cancelamento passasse, uma aprovação chegando depois deixaria o cliente cobrado por um pedido cancelado.
+2. **Pagamento `APROVADO` é estornado no provedor** (`POST /pagamentos/:id/estorno` no mock) antes de o pedido mudar. Se o provedor falhar, a resposta é `503` ou `502` e nada muda.
+3. **O estoque volta só se os insumos não foram usados**: cancelado de `AGUARDANDO_PAGAMENTO` ou `PAGO`, cada item gera uma `ENTRADA` com o usuário que cancelou e o motivo `Cancelamento do pedido <codigo>`. De `EM_PREPARO` ou `PRONTO` a comida já foi feita: há estorno, mas o saldo não volta.
+4. O pedido grava `CANCELADO`, `canceladoEm` e `motivoCancelamento`; o pagamento grava `ESTORNADO`, `estornadoEm` e a resposta do provedor.
+
+A devolução de estoque é a mesma da recusa do pagamento pelo webhook (`Estoque.devolverItensDe`).
+
+Como no pagamento, a chamada ao provedor fica fora da transação. A API confere tudo sem travar, pede o estorno com a chave `estorno-<pedidoId>` e só então trava o pedido, refaz as checagens com o status atual e grava. Se dois cancelamentos correm juntos, ou se a gravação falha depois do estorno, a nova tentativa reenvia a mesma chave e o provedor devolve o mesmo estorno: nunca há estorno em dobro, e o segundo cancelamento recebe `409`.
+
+### Limitações conhecidas do status
+
+- Não há volta de status. Um toque errado (marcar como pronto antes da hora) não se desfaz, o que preserva o histórico do pedido mas exige cuidado na operação.
+- Um pagamento que fica `PENDENTE` para sempre (webhook perdido) impede o cancelamento do pedido. Resolver isso depende da conciliação de pagamentos, ainda não implementada.
+- O mock guarda os pagamentos em memória: depois de reiniciado, o estorno de um pagamento antigo responde `404` no mock e `502` na API.
 
 ## Padrão de erro
 
