@@ -38,6 +38,9 @@ export interface ApiDefinition {
       store: typeof routes['pedidos.pagamento.store']
     }
   }
+  auditoria: {
+    index: typeof routes['auditoria.index']
+  }
   pagamentos: {
     webhook: typeof routes['pagamentos.webhook']
   }

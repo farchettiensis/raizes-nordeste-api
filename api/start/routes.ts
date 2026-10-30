@@ -59,6 +59,11 @@ router
       .as('pedidos')
 
     router
+      .get('auditoria', [controllers.Auditoria, 'index'])
+      .as('auditoria.index')
+      .use(middleware.perfil({ perfis: ['ADMIN'] }))
+
+    router
       .post('pagamentos/webhook', [controllers.PagamentoWebhooks, 'store'])
       .as('pagamentos.webhook')
       .use(middleware.assinaturaPagamento())

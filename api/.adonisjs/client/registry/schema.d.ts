@@ -175,6 +175,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/pagamentos_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'auditoria.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/auditoria'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: ExtractQueryForGet<InferInput<(typeof import('#validators/auditoria').listarAuditoriaValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/auditoria_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/auditoria_controller').default['index']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'pagamentos.webhook': {
     methods: ["POST"]
     pattern: '/api/v1/pagamentos/webhook'

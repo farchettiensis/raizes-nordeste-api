@@ -348,3 +348,143 @@ test.group('Auditoria de acessos negados', (group) => {
     assert.lengthOf(await registrosDe('acesso.negado'), 0)
   })
 })
+
+test.group('Consulta da auditoria', (group) => {
+  group.each.setup(() => testUtils.db().truncate())
+
+  type Registro = {
+    logId: number
+    acao: string
+    entidade: string
+    entidadeId: string | null
+    usuarioId: number | null
+    dados: Record<string, unknown> | null
+    ip: string | null
+    requestId: string | null
+    createdAt: string
+  }
+
+  type Listagem = {
+    data: Registro[]
+    metadata: { total: number; perPage: number; currentPage: number; lastPage: number }
+  }
+
+  function listagem(response: { body(): unknown }) {
+    return response.body() as Listagem
+  }
+
+  async function semear() {
+    const cliente = await criarUsuario('CLIENTE')
+    const gerente = await criarUsuario('GERENTE')
+    await LogAuditoria.createMany([
+      {
+        acao: 'auth.login',
+        entidade: 'user',
+        entidadeId: String(cliente.id),
+        usuarioId: cliente.id,
+      },
+      {
+        acao: 'pedido.criado',
+        entidade: 'pedido',
+        entidadeId: '10',
+        usuarioId: cliente.id,
+        dados: { canalPedido: 'APP' },
+      },
+      {
+        acao: 'pedido.status_alterado',
+        entidade: 'pedido',
+        entidadeId: '10',
+        usuarioId: gerente.id,
+        dados: { de: 'PAGO', para: 'EM_PREPARO' },
+      },
+      {
+        acao: 'pedido.status_alterado',
+        entidade: 'pedido',
+        entidadeId: '11',
+        usuarioId: gerente.id,
+        dados: { de: 'PAGO', para: 'EM_PREPARO' },
+      },
+    ])
+
+    return { cliente, gerente }
+  }
+
+  test('sem token responde 401', async ({ client }) => {
+    const response = await client.get('/api/v1/auditoria')
+
+    response.assertStatus(401)
+  })
+
+  test('so o admin consulta, e a tentativa dos demais fica registrada', async ({
+    client,
+    assert,
+  }) => {
+    const unidade = await criarUnidade()
+    const gerente = await criarUsuario('GERENTE', { unidadeId: unidade.id })
+
+    const response = await client.get('/api/v1/auditoria').loginAs(gerente)
+
+    response.assertStatus(403)
+    const registro = await unicoRegistroDe('acesso.negado')
+    assert.equal(registro.usuarioId, gerente.id)
+    assert.equal(registro.dados.rota, '/api/v1/auditoria')
+  })
+
+  test('o admin lista os registros mais recentes primeiro', async ({ client, assert }) => {
+    const { cliente } = await semear()
+
+    const response = await client.get('/api/v1/auditoria').loginAs(await criarUsuario('ADMIN'))
+
+    response.assertStatus(200)
+    const { data, metadata } = listagem(response)
+    assert.equal(metadata.total, 4)
+    assert.deepEqual(
+      data.map((registro) => registro.acao),
+      ['pedido.status_alterado', 'pedido.status_alterado', 'pedido.criado', 'auth.login']
+    )
+    assert.containsSubset(data[3], {
+      acao: 'auth.login',
+      entidade: 'user',
+      entidadeId: String(cliente.id),
+      usuarioId: cliente.id,
+      dados: null,
+    })
+    assert.properties(data[3], ['logId', 'ip', 'requestId', 'createdAt'])
+  })
+
+  test('filtra por acao, por entidade e id, e por usuario', async ({ client, assert }) => {
+    const { gerente } = await semear()
+    const admin = await criarUsuario('ADMIN')
+    const totalCom = async (qs: Record<string, unknown>) => {
+      const response = await client.get('/api/v1/auditoria').qs(qs).loginAs(admin)
+      response.assertStatus(200)
+
+      return listagem(response).metadata.total
+    }
+
+    assert.equal(await totalCom({ acao: 'pedido.status_alterado' }), 2)
+    assert.equal(await totalCom({ entidade: 'pedido', entidadeId: '10' }), 2)
+    assert.equal(await totalCom({ usuarioId: gerente.id }), 2)
+    assert.equal(await totalCom({ acao: 'pedido.criado', usuarioId: gerente.id }), 0)
+  })
+
+  test('e paginada e valida os filtros', async ({ client, assert }) => {
+    await semear()
+    const admin = await criarUsuario('ADMIN')
+
+    const pagina = await client.get('/api/v1/auditoria').qs({ page: 2, limit: 3 }).loginAs(admin)
+
+    pagina.assertStatus(200)
+    assert.lengthOf(listagem(pagina).data, 1)
+    assert.containsSubset(listagem(pagina).metadata, { total: 4, perPage: 3, currentPage: 2 })
+
+    for (const qs of [{ acao: 'pedido.inventado' }, { entidade: 'cliente' }, { limit: 101 }]) {
+      const response = await client
+        .get('/api/v1/auditoria')
+        .qs(qs as never)
+        .loginAs(admin)
+
+      response.assertStatus(422)
+    }
+  })
+})

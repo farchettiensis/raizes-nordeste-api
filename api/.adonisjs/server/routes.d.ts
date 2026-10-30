@@ -18,6 +18,7 @@ export type ScannedRoutes = {
     'pedidos.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pedidos.status.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pedidos.pagamento.store': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'auditoria.index': { paramsTuple?: []; params?: {} }
     'pagamentos.webhook': { paramsTuple?: []; params?: {} }
     'profile.profile.show': { paramsTuple?: []; params?: {} }
     'profile.access_tokens.destroy': { paramsTuple?: []; params?: {} }
@@ -32,6 +33,7 @@ export type ScannedRoutes = {
     'unidades.estoques.index': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pedidos.index': { paramsTuple?: []; params?: {} }
     'pedidos.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'auditoria.index': { paramsTuple?: []; params?: {} }
     'profile.profile.show': { paramsTuple?: []; params?: {} }
   }
   HEAD: {
@@ -44,6 +46,7 @@ export type ScannedRoutes = {
     'unidades.estoques.index': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pedidos.index': { paramsTuple?: []; params?: {} }
     'pedidos.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'auditoria.index': { paramsTuple?: []; params?: {} }
     'profile.profile.show': { paramsTuple?: []; params?: {} }
   }
   POST: {

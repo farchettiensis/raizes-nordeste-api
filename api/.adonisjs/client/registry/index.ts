@@ -90,6 +90,12 @@ const routes = {
     tokens: [{"old":"/api/v1/pedidos/:id/pagamento","type":0,"val":"api","end":""},{"old":"/api/v1/pedidos/:id/pagamento","type":0,"val":"v1","end":""},{"old":"/api/v1/pedidos/:id/pagamento","type":0,"val":"pedidos","end":""},{"old":"/api/v1/pedidos/:id/pagamento","type":1,"val":"id","end":""},{"old":"/api/v1/pedidos/:id/pagamento","type":0,"val":"pagamento","end":""}],
     types: placeholder as Registry['pedidos.pagamento.store']['types'],
   },
+  'auditoria.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/auditoria',
+    tokens: [{"old":"/api/v1/auditoria","type":0,"val":"api","end":""},{"old":"/api/v1/auditoria","type":0,"val":"v1","end":""},{"old":"/api/v1/auditoria","type":0,"val":"auditoria","end":""}],
+    types: placeholder as Registry['auditoria.index']['types'],
+  },
   'pagamentos.webhook': {
     methods: ["POST"],
     pattern: '/api/v1/pagamentos/webhook',
