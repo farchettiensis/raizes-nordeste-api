@@ -13,39 +13,27 @@ import { garantirPedidoVisivel } from '#services/escopo_de_acesso'
 import { GatewayPagamento, type RespostaDoEstorno } from '#services/gateway_pagamento'
 import { garantirPerfilAutorizado, garantirTransicaoPermitida } from '#services/transicao_de_status'
 
-function pagamentoEmAndamento() {
-  return new ApiException(
-    'O pagamento deste pedido ainda esta em andamento. Aguarde o resultado para cancelar.',
-    { code: 'PAGAMENTO_EM_ANDAMENTO', status: 409 }
-  )
-}
-
 @inject()
 export default class CancelamentoService {
   constructor(private gateway: GatewayPagamento) {}
 
   async cancelar(usuario: User, pedidoId: number, motivo: string) {
-    const { pedido, pagamento } = await this.cancelavel(usuario, pedidoId)
-    const estorno = pagamento?.aprovado ? await this.estornar(pedido, pagamento) : null
-
     const cancelado = await db.transaction(async (trx) => {
-      const travado = await this.cancelavel(usuario, pedidoId, trx)
+      const { pedido, pagamento } = await this.cancelavel(usuario, pedidoId, trx)
+      const estornado = pagamento?.aprovado ?? false
 
-      if (travado.pagamento?.aprovado) {
-        if (!estorno) {
-          throw pagamentoEmAndamento()
-        }
-
-        await this.registrarEstorno(travado.pagamento, estorno, usuario, trx)
+      if (estornado) {
+        await this.registrarEstorno(
+          pagamento!,
+          await this.estornar(pedido, pagamento!),
+          usuario,
+          trx
+        )
       }
 
-      await this.registrarCancelamento(
-        travado.pedido,
-        { usuario, motivo, estornado: estorno !== null },
-        trx
-      )
+      await this.registrarCancelamento(pedido, { usuario, motivo, estornado }, trx)
 
-      return travado.pedido
+      return pedido
     })
 
     await cancelado.load('itens', (itens) => itens.orderBy('id'))
@@ -54,11 +42,8 @@ export default class CancelamentoService {
     return cancelado
   }
 
-  private async cancelavel(usuario: User, pedidoId: number, trx?: TransactionClientContract) {
-    const encontrado = await Pedido.query({ client: trx })
-      .where('id', pedidoId)
-      .if(trx, (query) => query.forUpdate())
-      .first()
+  private async cancelavel(usuario: User, pedidoId: number, trx: TransactionClientContract) {
+    const encontrado = await Pedido.query({ client: trx }).where('id', pedidoId).forUpdate().first()
     const pedido = garantirPedidoVisivel(encontrado, usuario, pedidoId)
 
     garantirTransicaoPermitida(pedido, 'CANCELADO')
@@ -66,11 +51,14 @@ export default class CancelamentoService {
 
     const pagamento = await Pagamento.query({ client: trx })
       .where('pedidoId', pedido.id)
-      .if(trx, (query) => query.forUpdate())
+      .forUpdate()
       .first()
 
     if (pagamento?.pendente) {
-      throw pagamentoEmAndamento()
+      throw new ApiException(
+        'O pagamento deste pedido ainda esta em andamento. Aguarde o resultado para cancelar.',
+        { code: 'PAGAMENTO_EM_ANDAMENTO', status: 409 }
+      )
     }
 
     return { pedido, pagamento }

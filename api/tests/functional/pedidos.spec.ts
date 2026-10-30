@@ -1,6 +1,8 @@
 import type { ApiClient } from '@japa/api-client'
 import { test } from '@japa/runner'
+import { setTimeout as esperar } from 'node:timers/promises'
 import app from '@adonisjs/core/services/app'
+import db from '@adonisjs/lucid/services/db'
 import testUtils from '@adonisjs/core/services/test_utils'
 
 import Estoque from '#models/estoque'
@@ -1337,5 +1339,28 @@ test.group('Cancelamento de pedido', (group) => {
       [`estorno-${pedido.id}`]
     )
     assert.equal(await saldoDe(unidade, produto), 10)
+  })
+
+  test('entrega concluida enquanto o cancelamento espera nao deixa estorno no provedor', async ({
+    client,
+    assert,
+  }) => {
+    const { pedido } = await pedidoNoStatus('PRONTO', 'APROVADO')
+    const gerente = await equipeDe(pedido, 'GERENTE')
+    const trava = await db.transaction()
+
+    await Pedido.query({ client: trava }).where('id', pedido.id).forUpdate().firstOrFail()
+    const cancelamento = Promise.resolve(cancelar(client, pedido, gerente))
+    await esperar(300)
+    await Pedido.query({ client: trava }).where('id', pedido.id).update({ status: 'ENTREGUE' })
+    await trava.commit()
+
+    const response = await cancelamento
+
+    response.assertStatus(409)
+    assert.lengthOf(gateway.estornos, 0)
+    const salvo = await recarregado(pedido)
+    assert.equal(salvo.status, 'ENTREGUE')
+    assert.equal(salvo.pagamento.status, 'APROVADO')
   })
 })

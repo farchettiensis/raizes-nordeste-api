@@ -299,7 +299,7 @@ O cancelamento usa a mesma rota, com motivo obrigatório: `{ "status": "CANCELAD
 
 A devolução de estoque é a mesma da recusa do pagamento pelo webhook (`Estoque.devolverItensDe`).
 
-Como no pagamento, a chamada ao provedor fica fora da transação. A API confere tudo sem travar, pede o estorno com a chave `estorno-<pedidoId>` e só então trava o pedido, refaz as checagens com o status atual e grava. Se dois cancelamentos correm juntos, ou se a gravação falha depois do estorno, a nova tentativa reenvia a mesma chave e o provedor devolve o mesmo estorno: nunca há estorno em dobro, e o segundo cancelamento recebe `409`.
+Ao contrário da solicitação de pagamento, o estorno é pedido ao provedor com o pedido já travado (`SELECT ... FOR UPDATE`). Se o estorno saísse antes da trava, uma entrega concluída no meio do caminho deixaria o dinheiro devolvido no provedor e o pedido `ENTREGUE` e pago na API. O custo é segurar uma conexão do banco durante a chamada, limitada pelo timeout e pelo número de tentativas do cliente HTTP. A chave é `estorno-<pedidoId>`: se a gravação falhar depois do estorno, a nova tentativa reenvia a mesma chave e o provedor devolve o mesmo estorno, sem estornar em dobro. Dois cancelamentos simultâneos esperam a trava, e o segundo recebe `409`.
 
 ### Limitações conhecidas do status
 
