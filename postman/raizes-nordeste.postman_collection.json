@@ -13,7 +13,7 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "const daApi = pm.request.url.toString().startsWith(pm.variables.replaceIn('{{baseUrl}}'));",
+          "const daApi = pm.variables.replaceIn(pm.request.url.toString()).startsWith(pm.variables.replaceIn('{{baseUrl}}'));",
           "if (daApi && pm.response.code >= 400) {",
           "  pm.test('Erro no padrão da API', () => {",
           "    const corpo = pm.response.json();",
@@ -852,12 +852,17 @@
                   "  method: 'GET',",
                   "  header: { Accept: 'application/json', Authorization: 'Bearer ' + pm.collectionVariables.get('clienteToken') }",
                   "}, (falha, resposta) => {",
-                  "  const situacao = falha ? null : resposta.json().data.status;",
+                  "  const situacao = falha ? undefined : (resposta.json().data || {}).status;",
                   "  if (situacao === 'AGUARDANDO_PAGAMENTO' && restantes > 0) {",
                   "    setTimeout(() => aguardar(restantes - 1), 250);",
+                  "    return;",
                   "  }",
+                  "  pm.test('Webhook atualizou o pedido', () => {",
+                  "    pm.expect(falha, 'consulta ao pedido falhou').to.equal(null);",
+                  "    pm.expect(situacao).to.be.oneOf(['PAGO', 'CANCELADO']);",
+                  "  });",
                   "});",
-                  "aguardar(20);"
+                  "aguardar(40);"
                 ]
               }
             }
@@ -1086,12 +1091,17 @@
                   "  method: 'GET',",
                   "  header: { Accept: 'application/json', Authorization: 'Bearer ' + pm.collectionVariables.get('clienteToken') }",
                   "}, (falha, resposta) => {",
-                  "  const situacao = falha ? null : resposta.json().data.status;",
+                  "  const situacao = falha ? undefined : (resposta.json().data || {}).status;",
                   "  if (situacao === 'AGUARDANDO_PAGAMENTO' && restantes > 0) {",
                   "    setTimeout(() => aguardar(restantes - 1), 250);",
+                  "    return;",
                   "  }",
+                  "  pm.test('Webhook atualizou o pedido', () => {",
+                  "    pm.expect(falha, 'consulta ao pedido falhou').to.equal(null);",
+                  "    pm.expect(situacao).to.be.oneOf(['PAGO', 'CANCELADO']);",
+                  "  });",
                   "});",
-                  "aguardar(20);"
+                  "aguardar(40);"
                 ]
               }
             }
@@ -1636,12 +1646,17 @@
                   "  method: 'GET',",
                   "  header: { Accept: 'application/json', Authorization: 'Bearer ' + pm.collectionVariables.get('clienteToken') }",
                   "}, (falha, resposta) => {",
-                  "  const situacao = falha ? null : resposta.json().data.status;",
+                  "  const situacao = falha ? undefined : (resposta.json().data || {}).status;",
                   "  if (situacao === 'AGUARDANDO_PAGAMENTO' && restantes > 0) {",
                   "    setTimeout(() => aguardar(restantes - 1), 250);",
+                  "    return;",
                   "  }",
+                  "  pm.test('Webhook atualizou o pedido', () => {",
+                  "    pm.expect(falha, 'consulta ao pedido falhou').to.equal(null);",
+                  "    pm.expect(situacao).to.be.oneOf(['PAGO', 'CANCELADO']);",
+                  "  });",
                   "});",
-                  "aguardar(20);"
+                  "aguardar(40);"
                 ]
               }
             }
@@ -2453,6 +2468,10 @@
                   "pm.test('details aponta o campo itens[0].quantidade', () => {",
                   "  const campos = pm.response.json().details.map((d) => d.field);",
                   "  pm.expect(campos).to.include('itens[0].quantidade');",
+                  "});",
+                  "",
+                  "pm.test('details informa o saldo disponível', () => {",
+                  "  pm.expect(pm.response.json().details[0].issue).to.eql('Disponivel: 0');",
                   "});"
                 ]
               }
