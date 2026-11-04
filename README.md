@@ -465,7 +465,7 @@ Colunas de valores fechados são declaradas como `string` na migration. A lista 
 
 ## Modelo de dados
 
-O DER, com chaves, cardinalidades e restrições, está em [`api/database/der.md`](api/database/der.md), desenhado em Mermaid (o GitHub o exibe como diagrama). Como o `openapi.yaml`, ele é verificado por um teste: `tests/functional/der.spec.ts` compara tabelas, colunas, tipos, chaves e a cardinalidade de cada chave estrangeira com o banco migrado, e falha se o diagrama envelhecer.
+O DER, com chaves, cardinalidades e restrições, está em [`api/database/der.md`](api/database/der.md), desenhado em Mermaid (o GitHub o exibe como diagrama). Como o `openapi.yaml`, ele é verificado por um teste: `tests/functional/der.spec.ts` compara tabelas, colunas, tipos, chaves e a cardinalidade de cada chave estrangeira com o banco migrado, e falha se o diagrama divergir do banco em qualquer um desses pontos.
 
 | Tabela | Papel |
 |---|---|

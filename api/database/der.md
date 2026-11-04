@@ -1,6 +1,6 @@
 # DER: modelo de dados
 
-Diagrama entidade-relacionamento do banco PostgreSQL da API, na notação pé de galinha. As tabelas, colunas, tipos, chaves e cardinalidades são os das migrations em `database/migrations/`: o teste `tests/functional/der.spec.ts` compara este diagrama com o banco migrado e falha se os dois divergirem.
+Diagrama entidade-relacionamento do banco PostgreSQL da API, na notação pé de galinha. As tabelas, colunas, tipos, chaves e cardinalidades são os das migrations em `database/migrations/`: o teste `tests/functional/der.spec.ts` compara este diagrama com o banco migrado e falha se os dois divergirem. As seções de texto abaixo (restrições `CHECK`, unicidade composta e ações das chaves estrangeiras) e os comentários do diagrama são mantidos à mão, junto com as migrations.
 
 ```mermaid
 erDiagram
