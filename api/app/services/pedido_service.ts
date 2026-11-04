@@ -314,7 +314,7 @@ export default class PedidoService {
     return itens.flatMap((item, indice) => {
       const problema = problemaDo(item)
 
-      return problema ? [{ field: `itens[${indice}].${campo}`, issue: problema }] : []
+      return problema ? [{ field: `itens.${indice}.${campo}`, issue: problema }] : []
     })
   }
 }

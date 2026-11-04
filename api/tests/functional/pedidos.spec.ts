@@ -356,7 +356,7 @@ test.group('Criacao de pedido', (group) => {
     response.assertStatus(404)
     assert.equal(errorBody(response).error, 'PRODUTO_NAO_ENCONTRADO')
     assert.deepEqual(errorBody(response).details, [
-      { field: 'itens[0].produtoId', issue: 'Produto 999999 fora do cardapio da unidade' },
+      { field: 'itens.0.produtoId', issue: 'Produto 999999 fora do cardapio da unidade' },
     ])
   })
 
@@ -397,7 +397,7 @@ test.group('Criacao de pedido', (group) => {
     response.assertStatus(409)
     assert.equal(errorBody(response).error, 'PRODUTO_INDISPONIVEL')
     assert.deepEqual(errorBody(response).details, [
-      { field: 'itens[0].produtoId', issue: `Produto ${produto.id} indisponivel na unidade` },
+      { field: 'itens.0.produtoId', issue: `Produto ${produto.id} indisponivel na unidade` },
     ])
   })
 
@@ -466,8 +466,8 @@ test.group('Criacao de pedido', (group) => {
     response.assertStatus(409)
     assert.equal(errorBody(response).error, 'ESTOQUE_INSUFICIENTE')
     assert.deepEqual(errorBody(response).details, [
-      { field: 'itens[1].quantidade', issue: 'Disponivel: 1' },
-      { field: 'itens[2].quantidade', issue: 'Disponivel: 0' },
+      { field: 'itens.1.quantidade', issue: 'Disponivel: 1' },
+      { field: 'itens.2.quantidade', issue: 'Disponivel: 0' },
     ])
 
     assert.equal(await saldoDe(unidade, comSaldo), 5)

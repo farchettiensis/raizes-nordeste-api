@@ -339,7 +339,7 @@ Toda falha, em qualquer endpoint, responde com o mesmo corpo:
 {
   "error": "ESTOQUE_INSUFICIENTE",
   "message": "Nao ha quantidade suficiente para um ou mais itens.",
-  "details": [{ "field": "itens[0].quantidade", "issue": "Disponivel: 1" }],
+  "details": [{ "field": "itens.0.quantidade", "issue": "Disponivel: 1" }],
   "timestamp": "2026-02-05T12:00:00.000Z",
   "path": "/api/v1/pedidos",
   "requestId": "33be9a44-6849-439c-960c-cb2d995aa732"
