@@ -446,6 +446,7 @@ config/          configuração do framework e do pagamento
 providers/       registro do gateway de pagamento no container
 database/
   migrations/    evolução do esquema, fonte da verdade
+  der.md         DER em Mermaid, conferido contra o banco por teste
   schema.ts      classes geradas pelo Lucid a partir do banco
   schema_rules.ts  tipagem das colunas enum no arquivo gerado
 start/           rotas, kernel HTTP e variáveis de ambiente
@@ -463,6 +464,8 @@ No AdonisJS 7 as migrations são a fonte da verdade do esquema. Depois de `node 
 Colunas de valores fechados são declaradas como `string` na migration. A lista válida vive no model que a possui, como uma `const` marcada `as const`, e `database/schema_rules.ts` aponta a coluna para o tipo derivado dela. Assim `pedido.canalPedido` é `CanalPedido` no TypeScript, e não `string`, sem que o esquema precise de migration a cada valor novo.
 
 ## Modelo de dados
+
+O DER, com chaves, cardinalidades e restrições, está em [`api/database/der.md`](api/database/der.md), desenhado em Mermaid (o GitHub o exibe como diagrama). Como o `openapi.yaml`, ele é verificado por um teste: `tests/functional/der.spec.ts` compara tabelas, colunas, tipos, chaves e a cardinalidade de cada chave estrangeira com o banco migrado, e falha se o diagrama envelhecer.
 
 | Tabela | Papel |
 |---|---|
