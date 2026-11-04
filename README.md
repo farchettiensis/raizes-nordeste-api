@@ -10,6 +10,7 @@ Projeto Multidisciplinar 2026, trilha Back-End (UNINTER).
 |---|---|
 | `api/` | A API REST, em AdonisJS |
 | `pagamento-mock/` | Provedor de pagamento simulado, serviço separado em Fastify (veja o [README dele](pagamento-mock/README.md), que explica a escolha) |
+| `postman/` | Coleção Postman com o [plano de testes](#plano-de-testes) executável |
 
 ## Execução com Docker
 
@@ -346,6 +347,65 @@ Toda falha, em qualquer endpoint, responde com o mesmo corpo:
 ```
 
 O campo `error` é um identificador estável, pensado para o cliente tratar programaticamente; `message` é a mensagem legível; `details` traz um item por campo reprovado e vem vazio quando o erro não é de validação.
+
+## Plano de testes
+
+O plano de testes é a coleção [`postman/raizes-nordeste.postman_collection.json`](postman/raizes-nordeste.postman_collection.json). Cada requisição traz asserções (`pm.test`) sobre o status e o corpo, e um script da coleção confere o [padrão de erro](#padrão-de-erro) em toda falha da API.
+
+### Como executar
+
+1. Suba a pilha com os dados de demonstração: `docker compose up --build` na raiz (ou API e mock no host, como em [Como executar](#como-executar)).
+2. No Postman, importe o arquivo da coleção. As variáveis `baseUrl` (`http://localhost:3333`) e `mockUrl` (`http://localhost:4000`) já vêm preenchidas; ajuste-as se a API ou o mock estiverem em outro endereço.
+3. Rode a coleção inteira pelo Runner, na ordem. Pela linha de comando, o mesmo resultado sai do Newman:
+
+```bash
+npx newman run postman/raizes-nordeste.postman_collection.json
+```
+
+Não é preciso copiar token nem id à mão: os logins guardam o token de cada perfil, e os scripts guardam os ids de unidade, produto e pedido em variáveis da coleção, descobrindo a unidade e os produtos pelo código do seed. Por isso a ordem importa, e uma requisição avulsa só funciona depois das que a preparam. A coleção pode ser rodada várias vezes sem refazer o seed: o cadastro usa um e-mail aleatório, e cada execução consome pouco estoque.
+
+O pagamento é assíncrono, então as requisições `Mock:` chamam o provedor simulado direto em `/simulacoes`, no papel do cliente pagando no app do banco, e o script espera o webhook atualizar o pedido antes de seguir.
+
+### Cenários
+
+Os cenários numerados são as requisições de mesmo nome na coleção (pasta/nome). As demais (logins de outros perfis, pedidos e pagamentos de apoio, chamadas ao mock) só preparam o cenário seguinte. São 18 positivos e 14 negativos.
+
+| ID | Cenário | Endpoint | Entrada | Esperado | Pasta |
+|---|---|---|---|---|---|
+| T01 | Cadastro de cliente | `POST /auth/signup` | nome, e-mail novo, senha | 201, token, sem senha na resposta | Auth |
+| T02 | Login válido do cliente | `POST /auth/login` | `cliente@raizes.test` | 200 e token | Auth |
+| T03 | Perfil da conta autenticada | `GET /account/profile` | token do cliente | 200, dados da conta, sem senha | Auth |
+| T04 | Listar unidades com paginação | `GET /unidades` | `?page=1&limit=10` | 200, `data` e `metadata` | Unidades |
+| T05 | Cardápio da unidade | `GET /unidades/:id/cardapio` | unidade REC001 | 200, preço local e disponibilidade | Unidades |
+| T06 | Estoque da unidade pelo gerente | `GET /unidades/:id/estoque` | token do gerente da unidade | 200, saldo por produto | Unidades |
+| T07 | Criar pedido com itens válidos | `POST /pedidos` | canal `APP`, 2 cafés | 201, `AGUARDANDO_PAGAMENTO`, total `12.00` | Pedidos |
+| T08 | Consultar pedido | `GET /pedidos/:id` | pedido de T07 | 200, itens | Pedidos |
+| T09 | Listar pedidos filtrando por canal | `GET /pedidos` | `?canalPedido=APP` | 200, só pedidos `APP` | Pedidos |
+| T10 | Solicitar pagamento PIX | `POST /pedidos/:id/pagamento` | `{ "metodo": "PIX" }` | 202, pagamento `PENDENTE` com referência | Pagamento |
+| T11 | Pedido pago após aprovação | `GET /pedidos/:id` | mock `APROVADO` | 200, pedido `PAGO`, pagamento `APROVADO` | Pagamento |
+| T12 | Pedido cancelado após recusa | `GET /pedidos/:id` | mock `RECUSADO` com motivo | 200, pedido `CANCELADO`, pagamento `RECUSADO` com o motivo | Pagamento |
+| T13 | Cozinha inicia o preparo | `PATCH /pedidos/:id/status` | `EM_PREPARO`, token da cozinha | 200, `EM_PREPARO` | Status |
+| T14 | Cozinha marca como pronto | `PATCH /pedidos/:id/status` | `PRONTO`, token da cozinha | 200, `PRONTO` | Status |
+| T15 | Atendente entrega o pedido | `PATCH /pedidos/:id/status` | `ENTREGUE`, token da atendente | 200, `ENTREGUE` | Status |
+| T16 | Cliente cancela pedido não pago | `PATCH /pedidos/:id/status` | `CANCELADO` e motivo | 200, `CANCELADO` com o motivo | Status |
+| T17 | Gerente cancela pedido pago com estorno | `PATCH /pedidos/:id/status` | `CANCELADO` e motivo, pedido pago | 200, `CANCELADO`, pagamento `ESTORNADO` | Status |
+| T18 | Histórico do pedido na auditoria | `GET /auditoria` | `?entidade=pedido&entidadeId=<T07>`, token do admin | 200, `pedido.criado` e 4 `pedido.status_alterado`, com `requestId` | Auditoria |
+| T19 | Listar pedidos sem token | `GET /pedidos` | sem `Authorization` | 401 `NAO_AUTENTICADO` | Erros |
+| T20 | Login com senha errada | `POST /auth/login` | senha errada | 401 `CREDENCIAIS_INVALIDAS` | Erros |
+| T21 | Atendente tenta criar pedido | `POST /pedidos` | token da atendente | 403 `SEM_PERMISSAO` | Erros |
+| T22 | Cliente consulta pedido de outro cliente | `GET /pedidos/:id` | token de T01, pedido de T07 | 403 `SEM_PERMISSAO` | Erros |
+| T23 | Pedido sem canalPedido | `POST /pedidos` | corpo sem `canalPedido` | 422 `DADOS_INVALIDOS`, campo `canalPedido` | Erros |
+| T24 | Pedido com canal fora da lista | `POST /pedidos` | `canalPedido: "TELEFONE"` | 422 `DADOS_INVALIDOS`, campo `canalPedido` | Erros |
+| T25 | Pedido com quantidade negativa | `POST /pedidos` | `quantidade: -1` | 422 `DADOS_INVALIDOS`, campo `itens.0.quantidade` | Erros |
+| T26 | Cadastro com e-mail inválido | `POST /auth/signup` | `email: "nao-e-email"` | 422 `DADOS_INVALIDOS`, campo `email` | Erros |
+| T27 | Pedido em unidade inexistente | `POST /pedidos` | `unidadeId: 999999` | 404 `UNIDADE_NAO_ENCONTRADA` | Erros |
+| T28 | Consultar pedido inexistente | `GET /pedidos/:id` | id `999999` | 404 `PEDIDO_NAO_ENCONTRADO` | Erros |
+| T29 | Pedido em unidade inativa | `POST /pedidos` | unidade FOR001 | 409 `UNIDADE_INATIVA` | Erros |
+| T30 | Pedido com estoque insuficiente | `POST /pedidos` | canjica (BOL002), saldo 0 | 409 `ESTOQUE_INSUFICIENTE`, saldo em `details` | Erros |
+| T31 | Transição de status inválida | `PATCH /pedidos/:id/status` | `EM_PREPARO` no pedido entregue | 409 `TRANSICAO_DE_STATUS_INVALIDA` | Erros |
+| T32 | Token revogado após logout | `GET /account/profile` | token de T01 depois do logout | 401 `NAO_AUTENTICADO` | Erros |
+
+Além da coleção, a suíte automatizada da API (`npm test` em `api/`, com Japa) cobre as mesmas regras e as que a coleção não alcança, como pedidos e webhooks simultâneos e falhas do provedor.
 
 ## Comandos
 
