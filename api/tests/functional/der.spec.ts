@@ -77,22 +77,23 @@ async function colunasDoBanco(): Promise<Coluna[]> {
 
 async function restricoesDoBanco(): Promise<Restricao[]> {
   const { rows } = await db.rawQuery(
-    `select tc.table_name as tabela, kcu.column_name as coluna, tc.constraint_type as tipo,
-            tc.constraint_name as nome, ccu.table_name as referenciada
-       from information_schema.table_constraints tc
-       join information_schema.key_column_usage kcu
-         on kcu.constraint_name = tc.constraint_name and kcu.table_schema = tc.table_schema
-       join information_schema.constraint_column_usage ccu
-         on ccu.constraint_name = tc.constraint_name and ccu.table_schema = tc.table_schema
-      where tc.table_schema = 'public'
-        and tc.constraint_type in ('PRIMARY KEY', 'FOREIGN KEY', 'UNIQUE')
-        and tc.table_name <> all(?)`,
+    `select tabela.relname as tabela, coluna.attname as coluna, r.oid::text as nome,
+            case r.contype when 'p' then 'PRIMARY KEY' when 'f' then 'FOREIGN KEY' else 'UNIQUE' end as tipo,
+            referenciada.relname as referenciada
+       from pg_constraint r
+       join pg_class tabela on tabela.oid = r.conrelid
+       cross join unnest(r.conkey) as chave(numero)
+       join pg_attribute coluna on coluna.attrelid = r.conrelid and coluna.attnum = chave.numero
+       left join pg_class referenciada on referenciada.oid = r.confrelid
+      where r.connamespace = 'public'::regnamespace
+        and r.contype in ('p', 'f', 'u')
+        and tabela.relname <> all(?)`,
     [TABELAS_DO_FRAMEWORK]
   )
   return rows
 }
 
-const ordenado = (lista: string[]) => [...new Set(lista)].sort()
+const ordenado = (lista: string[]) => [...lista].sort()
 const deTipo = (restricoes: Restricao[], tipo: string) => restricoes.filter((r) => r.tipo === tipo)
 
 function unicasDeUmaColuna(restricoes: Restricao[]) {
