@@ -1,9 +1,7 @@
-import type { ApiClient } from '@japa/api-client'
 import { test } from '@japa/runner'
 import app from '@adonisjs/core/services/app'
 import testUtils from '@adonisjs/core/services/test_utils'
 
-import pagamentoConfig from '#config/pagamento'
 import Estoque from '#models/estoque'
 import LogAuditoria from '#models/log_auditoria'
 import MovimentacaoEstoque from '#models/movimentacao_estoque'
@@ -13,12 +11,12 @@ import type Produto from '#models/produto'
 import type Unidade from '#models/unidade'
 import type User from '#models/user'
 import { assinar } from '#services/assinatura_webhook'
-import { emCentavos } from '#services/centavos'
 import { GatewayPagamento } from '#services/gateway_pagamento'
 import PagamentoService from '#services/pagamento_service'
 import PedidoService from '#services/pedido_service'
 import GatewayFalso from '#tests/helpers/gateway_falso'
 import { comPedidoTravado } from '#tests/helpers/trava'
+import { agoraEmSegundos, enviarWebhook, eventoPara, MOTIVO, SEGREDO } from '#tests/helpers/webhook'
 import {
   criarCardapio,
   criarEstoque,
@@ -355,50 +353,6 @@ test.group('Solicitacao de pagamento', (group) => {
     })
   }
 })
-
-type ResultadoDoProvedor = 'APROVADO' | 'RECUSADO'
-
-const SEGREDO = pagamentoConfig.webhook.segredo.release()
-const MOTIVO = 'Saldo insuficiente'
-
-function agoraEmSegundos() {
-  return Math.floor(Date.now() / 1000)
-}
-
-function eventoPara(
-  pagamento: Pagamento,
-  status: ResultadoDoProvedor,
-  sobrescritas: Record<string, unknown> = {}
-) {
-  return {
-    id: `evt_${pagamento.id}_${status}`,
-    tipo: status === 'APROVADO' ? 'pagamento.aprovado' : 'pagamento.recusado',
-    criadoEm: '2026-10-04T12:00:00.000Z',
-    pagamento: {
-      id: pagamento.referenciaExterna,
-      referencia: String(pagamento.id),
-      valor: emCentavos(pagamento.valor),
-      metodo: pagamento.metodo,
-      status,
-      motivoRecusa: status === 'RECUSADO' ? MOTIVO : null,
-      processadoEm: '2026-10-04T12:00:00.000Z',
-      ...sobrescritas,
-    },
-  }
-}
-
-function enviarWebhook(
-  client: ApiClient,
-  evento: object,
-  { segredo = SEGREDO, timestamp = agoraEmSegundos() } = {}
-) {
-  const corpo = JSON.stringify(evento)
-
-  return client
-    .post('/api/v1/pagamentos/webhook')
-    .header('x-assinatura', `t=${timestamp},v1=${assinar(segredo, timestamp, corpo)}`)
-    .unsafeJson(corpo)
-}
 
 async function pedidoComDoisItens(cliente: User) {
   const unidade = await criarUnidade()
