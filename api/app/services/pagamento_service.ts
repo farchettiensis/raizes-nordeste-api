@@ -6,7 +6,6 @@ import type { Infer } from '@vinejs/vine/types'
 import { DateTime } from 'luxon'
 
 import ApiException from '#exceptions/api_exception'
-import Estoque from '#models/estoque'
 import Pagamento, { type MetodoPagamentoExterno } from '#models/pagamento'
 import Pedido, { type StatusPedido } from '#models/pedido'
 import type User from '#models/user'
@@ -15,7 +14,7 @@ import { emCentavos } from '#services/centavos'
 import { GatewayPagamento } from '#services/gateway_pagamento'
 import { aplicarTransicao } from '#services/transicao_de_status'
 import { garantirPedidoVisivel } from '#services/escopo_de_acesso'
-import { devolverPontosResgatados } from '#services/fidelidade_service'
+import { devolverReservasDo } from '#services/reservas_do_pedido'
 import type { eventoDePagamentoValidator } from '#validators/pagamento'
 
 export type EventoDePagamento = Infer<typeof eventoDePagamentoValidator>
@@ -217,16 +216,14 @@ export default class PagamentoService {
     await this.registrarResultado(pagamento, resultado)
 
     const origem = pedido.status
-    pedido.merge({ status: 'CANCELADO', canceladoEm: DateTime.now() })
-    await pedido.save()
-
-    await Estoque.devolverItensDe(
+    const { estoqueDevolvido } = await devolverReservasDo(
       pedido,
       { usuarioId: null, motivo: `Pagamento recusado do pedido ${pedido.codigo}` },
       resultado.trx
     )
 
-    await devolverPontosResgatados(pedido, resultado.trx)
+    pedido.merge({ status: 'CANCELADO', canceladoEm: DateTime.now() })
+    await pedido.save()
 
     await registrarAuditoria(
       {
@@ -237,7 +234,7 @@ export default class PagamentoService {
           de: origem,
           motivo: pagamento.motivoRecusa,
           estornado: false,
-          estoqueDevolvido: true,
+          estoqueDevolvido,
         },
       },
       resultado.trx

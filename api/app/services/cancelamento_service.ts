@@ -4,13 +4,12 @@ import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import { DateTime } from 'luxon'
 
 import ApiException from '#exceptions/api_exception'
-import Estoque from '#models/estoque'
 import Pagamento from '#models/pagamento'
 import Pedido from '#models/pedido'
 import type User from '#models/user'
 import { registrarAuditoria } from '#services/auditoria'
 import { garantirPedidoVisivel } from '#services/escopo_de_acesso'
-import { devolverPontosResgatados } from '#services/fidelidade_service'
+import { devolverReservasDo } from '#services/reservas_do_pedido'
 import { GatewayPagamento, type RespostaDoEstorno } from '#services/gateway_pagamento'
 import { garantirPerfilAutorizado, garantirTransicaoPermitida } from '#services/transicao_de_status'
 
@@ -103,17 +102,11 @@ export default class CancelamentoService {
     trx: TransactionClientContract
   ) {
     const origem = pedido.status
-    const estoqueDevolvido = pedido.devolveEstoqueAoCancelar
-
-    if (estoqueDevolvido) {
-      await Estoque.devolverItensDe(
-        pedido,
-        { usuarioId: usuario.id, motivo: `Cancelamento do pedido ${pedido.codigo}` },
-        trx
-      )
-    }
-
-    await devolverPontosResgatados(pedido, trx)
+    const { estoqueDevolvido } = await devolverReservasDo(
+      pedido,
+      { usuarioId: usuario.id, motivo: `Cancelamento do pedido ${pedido.codigo}` },
+      trx
+    )
 
     pedido.merge({ status: 'CANCELADO', canceladoEm: DateTime.now(), motivoCancelamento: motivo })
     await pedido.save()
