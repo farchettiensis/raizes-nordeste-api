@@ -13,6 +13,7 @@ export default class PedidoTransformer extends BaseTransformer<Pedido> {
       subtotal,
       desconto,
       total,
+      pontosGerados,
       canceladoEm,
       motivoCancelamento,
       createdAt,
@@ -27,6 +28,7 @@ export default class PedidoTransformer extends BaseTransformer<Pedido> {
       subtotal,
       desconto,
       total,
+      pontosGerados,
       itens: this.resource.itens.map((item) => ({
         produtoId: item.produtoId,
         nome: item.nomeProduto,

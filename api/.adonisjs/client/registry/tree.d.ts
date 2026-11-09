@@ -38,6 +38,16 @@ export interface ApiDefinition {
       store: typeof routes['pedidos.pagamento.store']
     }
   }
+  fidelidade: {
+    show: typeof routes['fidelidade.show']
+    movimentos: {
+      index: typeof routes['fidelidade.movimentos.index']
+    }
+    adesao: {
+      store: typeof routes['fidelidade.adesao.store']
+      destroy: typeof routes['fidelidade.adesao.destroy']
+    }
+  }
   auditoria: {
     index: typeof routes['auditoria.index']
   }

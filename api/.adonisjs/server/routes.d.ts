@@ -18,6 +18,10 @@ export type ScannedRoutes = {
     'pedidos.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pedidos.status.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pedidos.pagamento.store': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'fidelidade.show': { paramsTuple?: []; params?: {} }
+    'fidelidade.movimentos.index': { paramsTuple?: []; params?: {} }
+    'fidelidade.adesao.store': { paramsTuple?: []; params?: {} }
+    'fidelidade.adesao.destroy': { paramsTuple?: []; params?: {} }
     'auditoria.index': { paramsTuple?: []; params?: {} }
     'pagamentos.webhook': { paramsTuple?: []; params?: {} }
     'profile.profile.show': { paramsTuple?: []; params?: {} }
@@ -33,6 +37,8 @@ export type ScannedRoutes = {
     'unidades.estoques.index': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pedidos.index': { paramsTuple?: []; params?: {} }
     'pedidos.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'fidelidade.show': { paramsTuple?: []; params?: {} }
+    'fidelidade.movimentos.index': { paramsTuple?: []; params?: {} }
     'auditoria.index': { paramsTuple?: []; params?: {} }
     'profile.profile.show': { paramsTuple?: []; params?: {} }
   }
@@ -46,6 +52,8 @@ export type ScannedRoutes = {
     'unidades.estoques.index': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pedidos.index': { paramsTuple?: []; params?: {} }
     'pedidos.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'fidelidade.show': { paramsTuple?: []; params?: {} }
+    'fidelidade.movimentos.index': { paramsTuple?: []; params?: {} }
     'auditoria.index': { paramsTuple?: []; params?: {} }
     'profile.profile.show': { paramsTuple?: []; params?: {} }
   }
@@ -54,11 +62,15 @@ export type ScannedRoutes = {
     'auth.access_tokens.store': { paramsTuple?: []; params?: {} }
     'pedidos.store': { paramsTuple?: []; params?: {} }
     'pedidos.pagamento.store': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'fidelidade.adesao.store': { paramsTuple?: []; params?: {} }
     'pagamentos.webhook': { paramsTuple?: []; params?: {} }
     'profile.access_tokens.destroy': { paramsTuple?: []; params?: {} }
   }
   PATCH: {
     'pedidos.status.update': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+  }
+  DELETE: {
+    'fidelidade.adesao.destroy': { paramsTuple?: []; params?: {} }
   }
 }
 declare module '@adonisjs/core/types/http' {

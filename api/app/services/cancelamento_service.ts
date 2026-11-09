@@ -10,6 +10,7 @@ import Pedido from '#models/pedido'
 import type User from '#models/user'
 import { registrarAuditoria } from '#services/auditoria'
 import { garantirPedidoVisivel } from '#services/escopo_de_acesso'
+import { devolverPontosResgatados } from '#services/fidelidade_service'
 import { GatewayPagamento, type RespostaDoEstorno } from '#services/gateway_pagamento'
 import { garantirPerfilAutorizado, garantirTransicaoPermitida } from '#services/transicao_de_status'
 
@@ -111,6 +112,8 @@ export default class CancelamentoService {
         trx
       )
     }
+
+    await devolverPontosResgatados(pedido, trx)
 
     pedido.merge({ status: 'CANCELADO', canceladoEm: DateTime.now(), motivoCancelamento: motivo })
     await pedido.save()

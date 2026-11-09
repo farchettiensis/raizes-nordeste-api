@@ -1,6 +1,7 @@
 import { DateTime } from 'luxon'
 
 import Estoque from '#models/estoque'
+import FidelidadeConta from '#models/fidelidade_conta'
 import Pedido from '#models/pedido'
 import Produto from '#models/produto'
 import Unidade from '#models/unidade'
@@ -88,6 +89,13 @@ export function criarPedido(unidade: Unidade, cliente: User, atributos: Partial<
     total: '18.50',
     ...atributos,
   })
+}
+
+export async function aderirAFidelidade(cliente: User, saldoPontos = 0) {
+  cliente.consentimentoFidelidadeEm = DateTime.now()
+  await cliente.save()
+
+  return FidelidadeConta.create({ clienteId: cliente.id, saldoPontos, aderiuEm: DateTime.now() })
 }
 
 export function agora() {

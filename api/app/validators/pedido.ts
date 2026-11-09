@@ -18,6 +18,7 @@ export const criarPedidoValidator = vine.create({
     .minLength(1)
     .distinct('produtoId'),
   observacoes: vine.string().trim().maxLength(500).optional(),
+  pontosResgatados: vine.number().withoutDecimals().min(1).optional(),
 })
 
 export const listarPedidosValidator = vine.create({

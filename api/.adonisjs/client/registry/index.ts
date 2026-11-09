@@ -90,6 +90,30 @@ const routes = {
     tokens: [{"old":"/api/v1/pedidos/:id/pagamento","type":0,"val":"api","end":""},{"old":"/api/v1/pedidos/:id/pagamento","type":0,"val":"v1","end":""},{"old":"/api/v1/pedidos/:id/pagamento","type":0,"val":"pedidos","end":""},{"old":"/api/v1/pedidos/:id/pagamento","type":1,"val":"id","end":""},{"old":"/api/v1/pedidos/:id/pagamento","type":0,"val":"pagamento","end":""}],
     types: placeholder as Registry['pedidos.pagamento.store']['types'],
   },
+  'fidelidade.show': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/fidelidade',
+    tokens: [{"old":"/api/v1/fidelidade","type":0,"val":"api","end":""},{"old":"/api/v1/fidelidade","type":0,"val":"v1","end":""},{"old":"/api/v1/fidelidade","type":0,"val":"fidelidade","end":""}],
+    types: placeholder as Registry['fidelidade.show']['types'],
+  },
+  'fidelidade.movimentos.index': {
+    methods: ["GET","HEAD"],
+    pattern: '/api/v1/fidelidade/movimentos',
+    tokens: [{"old":"/api/v1/fidelidade/movimentos","type":0,"val":"api","end":""},{"old":"/api/v1/fidelidade/movimentos","type":0,"val":"v1","end":""},{"old":"/api/v1/fidelidade/movimentos","type":0,"val":"fidelidade","end":""},{"old":"/api/v1/fidelidade/movimentos","type":0,"val":"movimentos","end":""}],
+    types: placeholder as Registry['fidelidade.movimentos.index']['types'],
+  },
+  'fidelidade.adesao.store': {
+    methods: ["POST"],
+    pattern: '/api/v1/fidelidade/adesao',
+    tokens: [{"old":"/api/v1/fidelidade/adesao","type":0,"val":"api","end":""},{"old":"/api/v1/fidelidade/adesao","type":0,"val":"v1","end":""},{"old":"/api/v1/fidelidade/adesao","type":0,"val":"fidelidade","end":""},{"old":"/api/v1/fidelidade/adesao","type":0,"val":"adesao","end":""}],
+    types: placeholder as Registry['fidelidade.adesao.store']['types'],
+  },
+  'fidelidade.adesao.destroy': {
+    methods: ["DELETE"],
+    pattern: '/api/v1/fidelidade/adesao',
+    tokens: [{"old":"/api/v1/fidelidade/adesao","type":0,"val":"api","end":""},{"old":"/api/v1/fidelidade/adesao","type":0,"val":"v1","end":""},{"old":"/api/v1/fidelidade/adesao","type":0,"val":"fidelidade","end":""},{"old":"/api/v1/fidelidade/adesao","type":0,"val":"adesao","end":""}],
+    types: placeholder as Registry['fidelidade.adesao.destroy']['types'],
+  },
   'auditoria.index': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/auditoria',

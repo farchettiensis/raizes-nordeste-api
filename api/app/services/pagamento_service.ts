@@ -15,6 +15,7 @@ import { emCentavos } from '#services/centavos'
 import { GatewayPagamento } from '#services/gateway_pagamento'
 import { aplicarTransicao } from '#services/transicao_de_status'
 import { garantirPedidoVisivel } from '#services/escopo_de_acesso'
+import { devolverPontosResgatados } from '#services/fidelidade_service'
 import type { eventoDePagamentoValidator } from '#validators/pagamento'
 
 export type EventoDePagamento = Infer<typeof eventoDePagamentoValidator>
@@ -224,6 +225,8 @@ export default class PagamentoService {
       { usuarioId: null, motivo: `Pagamento recusado do pedido ${pedido.codigo}` },
       resultado.trx
     )
+
+    await devolverPontosResgatados(pedido, resultado.trx)
 
     await registrarAuditoria(
       {

@@ -28,6 +28,11 @@ tags:
     description: |
       Pagamento por um provedor externo (simulado pelo servico pagamento-mock).
       A API solicita o pagamento e recebe o resultado depois, por webhook.
+  - name: Fidelidade
+    description: |
+      Programa de pontos do cliente, com adesao por consentimento explicito.
+      Pontos sao ganhos na entrega do pedido e resgatados como desconto na
+      criacao de um novo pedido.
   - name: Auditoria
     description: Trilha das acoes sensiveis, para a matriz
 
@@ -343,6 +348,13 @@ paths:
         problema: unidade inexistente (404) ou inativa (409), produto fora do
         cardapio da unidade (404), produto indisponivel (409) e estoque
         insuficiente (409).
+
+        Com `pontosResgatados`, o cliente troca pontos de fidelidade por
+        desconto (R$ 0,05 por ponto, ate 50% do subtotal). Depois do estoque,
+        a API confere a adesao ao programa (409 FIDELIDADE_INATIVA), o saldo
+        (409 SALDO_DE_PONTOS_INSUFICIENTE) e o limite (409
+        DESCONTO_ACIMA_DO_LIMITE). Os pontos saem do saldo na criacao, com a
+        conta bloqueada, e voltam se o pedido for cancelado.
       requestBody:
         required: true
         content:
@@ -550,6 +562,125 @@ paths:
         '503':
           $ref: '#/components/responses/GatewayPagamentoIndisponivel'
 
+  /api/v1/fidelidade:
+    get:
+      tags: [Fidelidade]
+      summary: Situacao do cliente no programa de fidelidade
+      description: |
+        Exclusivo do CLIENTE. Responde 200 mesmo sem adesao, com `ativa:
+        false`, para o app mostrar o convite. Traz as regras vigentes: pontos
+        por real, valor do ponto e limite de desconto.
+      responses:
+        '200':
+          description: Situacao no programa
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProgramaDeFidelidade'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+
+  /api/v1/fidelidade/movimentos:
+    get:
+      tags: [Fidelidade]
+      summary: Extrato de pontos do cliente
+      description: |
+        Exclusivo do CLIENTE. Movimentos paginados da propria conta, mais
+        recentes primeiro: ACUMULO na entrega, RESGATE na criacao do pedido,
+        ESTORNO quando um pedido com resgate e cancelado e EXPIRACAO quando o
+        consentimento e revogado.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Movimentos paginados
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data, metadata]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MovimentoDeFidelidade'
+                  metadata:
+                    $ref: '#/components/schemas/PaginationMetadata'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '422':
+          $ref: '#/components/responses/DadosInvalidos'
+
+  /api/v1/fidelidade/adesao:
+    post:
+      tags: [Fidelidade]
+      summary: Adere ao programa com consentimento explicito
+      description: |
+        Exclusivo do CLIENTE. O corpo precisa trazer `consentimento: true`:
+        a adesao e o consentimento para o tratamento dos dados de consumo
+        com a finalidade de fidelizacao (LGPD, art. 7, I). Grava a data do
+        consentimento no usuario, abre a conta (ou reabre, com saldo zero) e
+        registra `fidelidade.aderida` na auditoria.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [consentimento]
+              properties:
+                consentimento:
+                  type: boolean
+                  enum: [true]
+            example:
+              consentimento: true
+      responses:
+        '201':
+          description: Adesao registrada
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/ProgramaDeFidelidade'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '409':
+          $ref: '#/components/responses/FidelidadeEmConflito'
+        '422':
+          $ref: '#/components/responses/DadosInvalidos'
+    delete:
+      tags: [Fidelidade]
+      summary: Revoga o consentimento e sai do programa
+      description: |
+        Exclusivo do CLIENTE. A revogacao vale a qualquer momento (LGPD, art.
+        8, paragrafo 5). Limpa a data do consentimento, zera o saldo com um
+        movimento de EXPIRACAO e registra `fidelidade.revogada` na auditoria.
+        A conta e o extrato ficam, porque sustentam os descontos ja
+        concedidos; a partir daqui nada mais e acumulado nem resgatado.
+      responses:
+        '204':
+          description: Consentimento revogado
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '409':
+          $ref: '#/components/responses/FidelidadeEmConflito'
+
   /api/v1/auditoria:
     get:
       tags: [Auditoria]
@@ -559,7 +690,8 @@ paths:
         recentes primeiro. Cada acao sensivel grava um registro na mesma
         transacao da acao: criacao, mudanca de status e cancelamento de
         pedido; solicitacao, resultado e estorno de pagamento; cadastro,
-        login, tentativa de login negada e logout. Todo 403 da API tambem
+        login, tentativa de login negada e logout; adesao e revogacao do
+        consentimento de fidelidade. Todo 403 da API tambem
         grava um registro `acesso.negado`, inclusive a tentativa de abrir
         esta rota sem ser ADMIN.
 
@@ -587,13 +719,15 @@ paths:
                 pagamento.aprovado,
                 pagamento.recusado,
                 pagamento.estornado,
+                fidelidade.aderida,
+                fidelidade.revogada,
                 acesso.negado,
               ]
         - name: entidade
           in: query
           schema:
             type: string
-            enum: [user, pedido, pagamento, rota]
+            enum: [user, pedido, pagamento, fidelidade, rota]
         - name: entidadeId
           in: query
           schema:
@@ -744,12 +878,14 @@ components:
               pagamento.aprovado,
               pagamento.recusado,
               pagamento.estornado,
+              fidelidade.aderida,
+              fidelidade.revogada,
               acesso.negado,
             ]
           example: pedido.cancelado
         entidade:
           type: string
-          enum: [user, pedido, pagamento, rota]
+          enum: [user, pedido, pagamento, fidelidade, rota]
           example: pedido
         entidadeId:
           type: string
@@ -942,6 +1078,11 @@ components:
           type: string
           maxLength: 500
           example: Sem cebola
+        pontosResgatados:
+          type: integer
+          minimum: 1
+          description: Pontos de fidelidade trocados por desconto neste pedido
+          example: 100
 
     ItemDoPedido:
       type: object
@@ -977,6 +1118,7 @@ components:
           subtotal,
           desconto,
           total,
+          pontosGerados,
           itens,
           canceladoEm,
           motivoCancelamento,
@@ -1009,6 +1151,10 @@ components:
         total:
           type: string
           example: '60.15'
+        pontosGerados:
+          type: integer
+          description: Pontos de fidelidade creditados na entrega; zero ate la ou sem adesao
+          example: 0
         itens:
           type: array
           items:
@@ -1160,6 +1306,66 @@ components:
             processadoEm:
               type: string
               format: date-time
+
+    ProgramaDeFidelidade:
+      type: object
+      required: [ativa, aderiuEm, saldoPontos, regras]
+      properties:
+        ativa:
+          type: boolean
+          example: true
+        aderiuEm:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2026-02-05T12:00:00.000Z'
+        saldoPontos:
+          type: integer
+          example: 200
+        regras:
+          type: object
+          required: [pontosPorReal, valorDoPonto, limiteDeDescontoPercentual]
+          properties:
+            pontosPorReal:
+              type: integer
+              example: 1
+            valorDoPonto:
+              type: string
+              example: '0.05'
+            limiteDeDescontoPercentual:
+              type: integer
+              example: 50
+
+    MovimentoDeFidelidade:
+      type: object
+      required: [movimentoId, tipo, pontos, saldoResultante, pedidoId, descricao, createdAt]
+      properties:
+        movimentoId:
+          type: integer
+          example: 12
+        tipo:
+          type: string
+          enum: [ACUMULO, RESGATE, EXPIRACAO, ESTORNO]
+          example: ACUMULO
+        pontos:
+          type: integer
+          description: Positivo quando entra no saldo, negativo quando sai
+          example: 37
+        saldoResultante:
+          type: integer
+          example: 237
+        pedidoId:
+          type: integer
+          nullable: true
+          example: 9001
+        descricao:
+          type: string
+          nullable: true
+          example: Pedido PED260205A1B2C3D4 entregue
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-02-05T12:00:00.000Z'
 
     DetalheErro:
       type: object
@@ -1376,7 +1582,7 @@ components:
                 path: /api/v1/pedidos
                 requestId: 2c8d3e4f-5061-4b72-9c83-ad94e5f60718
     PedidoEmConflito:
-      description: Unidade inativa, produto indisponivel ou estoque insuficiente
+      description: Unidade inativa, produto indisponivel, estoque insuficiente ou resgate de pontos recusado
       content:
         application/json:
           schema:
@@ -1412,6 +1618,34 @@ components:
                 timestamp: '2026-02-05T12:00:00.000Z'
                 path: /api/v1/pedidos
                 requestId: 5fb16172-8394-4ea5-8f16-d02718293a4b
+            fidelidadeInativa:
+              value:
+                error: FIDELIDADE_INATIVA
+                message: O cliente nao participa do programa de fidelidade.
+                details: []
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/pedidos
+                requestId: 60c27283-94a5-4fb6-a027-e13829304b5c
+            saldoDePontosInsuficiente:
+              value:
+                error: SALDO_DE_PONTOS_INSUFICIENTE
+                message: O saldo de pontos nao cobre o resgate.
+                details:
+                  - field: pontosResgatados
+                    issue: 'Saldo: 50'
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/pedidos
+                requestId: 71d38394-a5b6-4c07-b138-f2493a415c6d
+            descontoAcimaDoLimite:
+              value:
+                error: DESCONTO_ACIMA_DO_LIMITE
+                message: O desconto passa do limite permitido para o pedido.
+                details:
+                  - field: pontosResgatados
+                    issue: 'Maximo: 370 pontos'
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/pedidos
+                requestId: 82e494a5-b6c7-4d18-8249-035a4b526d7e
 
     SemPermissaoNoPedido:
       description: Perfil sem permissao ou pedido de outro cliente
@@ -1647,6 +1881,30 @@ components:
             timestamp: '2026-02-05T12:00:00.000Z'
             path: /api/v1/pedidos/9001/status
             requestId: d17c8d9e-afb0-4c12-93d4-f5a6b7c8d9ea
+
+    FidelidadeEmConflito:
+      description: Adesao ja ativa, ou revogacao sem adesao ativa
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+          examples:
+            jaAtiva:
+              value:
+                error: FIDELIDADE_JA_ATIVA
+                message: O cliente ja participa do programa de fidelidade.
+                details: []
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/fidelidade/adesao
+                requestId: 93f5a5b6-c7d8-4e29-935a-146b5c637e8f
+            inativa:
+              value:
+                error: FIDELIDADE_INATIVA
+                message: O cliente nao participa do programa de fidelidade.
+                details: []
+                timestamp: '2026-02-05T12:00:00.000Z'
+                path: /api/v1/fidelidade/adesao
+                requestId: a406b6c7-d8e9-4f3a-a46b-257c6d748f90
 
     AssinaturaInvalida:
       description: Cabecalho X-Assinatura ausente, invalido ou expirado

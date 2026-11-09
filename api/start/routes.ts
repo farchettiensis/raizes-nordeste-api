@@ -59,6 +59,17 @@ router
       .as('pedidos')
 
     router
+      .group(() => {
+        router.get('/', [controllers.Fidelidade, 'show']).as('show')
+        router.get('movimentos', [controllers.FidelidadeMovimentos, 'index']).as('movimentos.index')
+        router.post('adesao', [controllers.FidelidadeAdesoes, 'store']).as('adesao.store')
+        router.delete('adesao', [controllers.FidelidadeAdesoes, 'destroy']).as('adesao.destroy')
+      })
+      .prefix('fidelidade')
+      .as('fidelidade')
+      .use(middleware.perfil({ perfis: ['CLIENTE'] }))
+
+    router
       .get('auditoria', [controllers.Auditoria, 'index'])
       .as('auditoria.index')
       .use(middleware.perfil({ perfis: ['ADMIN'] }))

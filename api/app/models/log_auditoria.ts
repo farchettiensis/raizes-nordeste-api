@@ -15,12 +15,14 @@ export const ACOES_AUDITORIA = [
   'pagamento.aprovado',
   'pagamento.recusado',
   'pagamento.estornado',
+  'fidelidade.aderida',
+  'fidelidade.revogada',
   'acesso.negado',
 ] as const
 
 export type AcaoAuditoria = (typeof ACOES_AUDITORIA)[number]
 
-export const ENTIDADES_AUDITADAS = ['user', 'pedido', 'pagamento', 'rota'] as const
+export const ENTIDADES_AUDITADAS = ['user', 'pedido', 'pagamento', 'fidelidade', 'rota'] as const
 
 export type EntidadeAuditada = (typeof ENTIDADES_AUDITADAS)[number]
 

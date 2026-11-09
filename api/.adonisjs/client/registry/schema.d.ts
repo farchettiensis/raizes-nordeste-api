@@ -175,6 +175,54 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/pagamentos_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
     }
   }
+  'fidelidade.show': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/fidelidade'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/fidelidade_controller').default['show']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/fidelidade_controller').default['show']>>>
+    }
+  }
+  'fidelidade.movimentos.index': {
+    methods: ["GET","HEAD"]
+    pattern: '/api/v1/fidelidade/movimentos'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: ExtractQueryForGet<InferInput<(typeof import('#validators/fidelidade').listarMovimentosValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/fidelidade_movimentos_controller').default['index']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/fidelidade_movimentos_controller').default['index']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'fidelidade.adesao.store': {
+    methods: ["POST"]
+    pattern: '/api/v1/fidelidade/adesao'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/fidelidade').aderirFidelidadeValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/fidelidade').aderirFidelidadeValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/fidelidade_adesoes_controller').default['store']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/fidelidade_adesoes_controller').default['store']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
+  'fidelidade.adesao.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/v1/fidelidade/adesao'
+    types: {
+      body: {}
+      paramsTuple: []
+      params: {}
+      query: {}
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/fidelidade_adesoes_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/fidelidade_adesoes_controller').default['destroy']>>>
+    }
+  }
   'auditoria.index': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/auditoria'

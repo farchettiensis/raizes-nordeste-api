@@ -5,6 +5,7 @@ import { DateTime } from 'luxon'
 
 import ApiException, { type ErrorDetail } from '#exceptions/api_exception'
 import Estoque from '#models/estoque'
+import FidelidadeConta from '#models/fidelidade_conta'
 import MovimentacaoEstoque from '#models/movimentacao_estoque'
 import Pedido, { type CanalPedido, type StatusPedido } from '#models/pedido'
 import Unidade from '#models/unidade'
@@ -12,6 +13,7 @@ import UnidadeProduto from '#models/unidade_produto'
 import type User from '#models/user'
 import { registrarAuditoria } from '#services/auditoria'
 import { emCentavos, emReais } from '#services/centavos'
+import { creditarPontosDaEntrega, resgatarPontos } from '#services/fidelidade_service'
 import {
   garantirAcessoAUnidade,
   garantirPedidoVisivel,
@@ -33,6 +35,7 @@ export type NovoPedido = {
   canalPedido: CanalPedido
   itens: ItemSolicitado[]
   observacoes?: string
+  pontosResgatados?: number
 }
 
 export type FiltrosDePedidos = {
@@ -89,6 +92,10 @@ export default class PedidoService {
       garantirPerfilAutorizado(visivel, usuario, destino)
 
       await aplicarTransicao(visivel, destino, usuario, trx)
+
+      if (destino === 'ENTREGUE') {
+        await creditarPontosDaEntrega(visivel, trx)
+      }
 
       return visivel
     })
@@ -234,7 +241,10 @@ export default class PedidoService {
       }
     })
 
-    const totalEmCentavos = itens.reduce((soma, item) => soma + item.subtotalEmCentavos, 0)
+    const subtotalDoPedido = itens.reduce((soma, item) => soma + item.subtotalEmCentavos, 0)
+    const pontos = dados.pontosResgatados
+    const conta = pontos ? await resgatarPontos(cliente, pontos, subtotalDoPedido, trx) : null
+    const descontoEmCentavos = pontos ? FidelidadeConta.descontoEmCentavos(pontos) : 0
 
     const pedido = await Pedido.create(
       {
@@ -243,9 +253,9 @@ export default class PedidoService {
         clienteId: cliente.id,
         canalPedido: dados.canalPedido,
         status: 'AGUARDANDO_PAGAMENTO',
-        subtotal: emReais(totalEmCentavos),
-        desconto: emReais(0),
-        total: emReais(totalEmCentavos),
+        subtotal: emReais(subtotalDoPedido),
+        desconto: emReais(descontoEmCentavos),
+        total: emReais(subtotalDoPedido - descontoEmCentavos),
         observacoes: dados.observacoes ?? null,
       },
       { client: trx }
@@ -260,6 +270,15 @@ export default class PedidoService {
 
     await this.baixarEstoque(pedido, cliente, dados.itens, estoques, trx)
 
+    if (conta) {
+      await conta.lancar({
+        tipo: 'RESGATE',
+        pontos: -pontos!,
+        pedidoId: pedido.id,
+        descricao: `Resgate no pedido ${pedido.codigo}`,
+      })
+    }
+
     await registrarAuditoria(
       {
         acao: 'pedido.criado',
@@ -270,6 +289,7 @@ export default class PedidoService {
           unidadeId: pedido.unidadeId,
           canalPedido: pedido.canalPedido,
           total: pedido.total,
+          desconto: pedido.desconto,
           itens: itens.length,
         },
       },
