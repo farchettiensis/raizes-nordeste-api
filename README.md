@@ -117,6 +117,8 @@ O seeder cria quatro unidades (uma delas inativa, de propósito), oito produtos,
 | `cozinha@raizes.test` | COZINHA |
 | `cliente@raizes.test` | CLIENTE |
 
+O cliente já vem inscrito na [fidelidade](#fidelidade), com 200 pontos de saldo inicial, para o resgate poder ser demonstrado de imediato.
+
 ## Documentação da API
 
 Com o servidor rodando, abra `/docs` na URL impressa na inicialização. A raiz `/` redireciona para lá.
@@ -147,6 +149,10 @@ O Swagger em `/docs` traz os exemplos de request e response de cada um. Esta tab
 | PATCH | `/api/v1/pedidos/:id/status` | token, perfil da transição, pedido no escopo | Avança o pedido da cozinha ao balcão ou o cancela |
 | POST | `/api/v1/pedidos/:id/pagamento` | token, perfil CLIENTE, dono do pedido | Solicita o pagamento ao provedor externo |
 | POST | `/api/v1/pagamentos/webhook` | assinatura HMAC do provedor | Recebe o resultado do pagamento |
+| GET | `/api/v1/fidelidade` | token, perfil CLIENTE | Situação no programa de pontos: adesão, saldo e regras |
+| GET | `/api/v1/fidelidade/movimentos` | token, perfil CLIENTE | Extrato de pontos, paginado |
+| POST | `/api/v1/fidelidade/adesao` | token, perfil CLIENTE | Adere ao programa com consentimento explícito |
+| DELETE | `/api/v1/fidelidade/adesao` | token, perfil CLIENTE | Revoga o consentimento e sai do programa |
 | GET | `/api/v1/auditoria` | token, perfil ADMIN | Trilha de auditoria das ações sensíveis, com filtros |
 
 Listagens aceitam `?page=1&limit=10` e respondem `{ "data": [...], "metadata": { ... } }`.
@@ -194,6 +200,7 @@ No estoque vale o mesmo vínculo: ATENDENTE, COZINHA e GERENTE consultam só a u
 - **O cliente vem do token.** O corpo não aceita `clienteId`, então ninguém cria pedido em nome de outra pessoa, e a resposta não expõe dado pessoal.
 - **O servidor calcula o preço.** Cada item copia o nome e o preço praticado na unidade naquele momento, e o total é somado em centavos inteiros, sem erro de ponto flutuante.
 - **O estoque é baixado na criação**, com uma movimentação de `SAIDA` por item, vinculada ao pedido. Baixar só na aprovação do pagamento deixaria a checagem da criação como mera sugestão: dois clientes poderiam pagar pela mesma última unidade, e o conflito apareceria depois do dinheiro, na forma de estorno. Com a baixa na criação, o 409 acontece antes de qualquer cobrança. A recusa do pagamento devolve o saldo com uma movimentação de `ENTRADA`.
+- **Pontos podem virar desconto.** Com `pontosResgatados`, o cliente troca pontos de [fidelidade](#fidelidade) por desconto em `desconto`, e o `total` já sai abatido.
 - **Pedidos simultâneos não vendem a mesma unidade duas vezes.** Tudo roda numa transação, e os saldos dos produtos do pedido são bloqueados com `SELECT ... FOR UPDATE`, sempre na ordem do `produto_id` para evitar deadlock. Um segundo pedido pelo mesmo produto espera o primeiro terminar e enxerga o saldo já baixado. Há um teste que dispara dois pedidos ao mesmo tempo pela última unidade e exige um `201` e um `409`; sem o bloqueio, os dois são aceitos.
 
 As verificações seguem uma ordem fixa, e cada uma aponta em `details` todos os itens com problema, não só o primeiro:
@@ -206,6 +213,9 @@ As verificações seguem uma ordem fixa, e cada uma aponta em `details` todos os
 | Produto fora do cardápio da unidade | 404 | `PRODUTO_NAO_ENCONTRADO` |
 | Produto marcado indisponível na unidade ou inativo na rede | 409 | `PRODUTO_INDISPONIVEL` |
 | Quantidade acima do saldo | 409 | `ESTOQUE_INSUFICIENTE` |
+| Resgate de pontos sem adesão ativa à fidelidade | 409 | `FIDELIDADE_INATIVA` |
+| Pontos resgatados acima do saldo | 409 | `SALDO_DE_PONTOS_INSUFICIENTE` |
+| Desconto acima de 50% do subtotal | 409 | `DESCONTO_ACIMA_DO_LIMITE` |
 
 Limitação conhecida: um pedido que nunca é pago segura o estoque indefinidamente. Liberar a reserva de pedidos abandonados exige expiração por tempo, com uma rotina agendada que cancele o pedido e devolva o saldo, e isso não está implementado.
 
@@ -298,7 +308,7 @@ O cancelamento usa a mesma rota, com motivo obrigatório: `{ "status": "CANCELAD
 3. **O estoque volta só se os insumos não foram usados**: cancelado de `AGUARDANDO_PAGAMENTO` ou `PAGO`, cada item gera uma `ENTRADA` com o usuário que cancelou e o motivo `Cancelamento do pedido <codigo>`. De `EM_PREPARO` ou `PRONTO` a comida já foi feita: há estorno, mas o saldo não volta.
 4. O pedido grava `CANCELADO`, `canceladoEm` e `motivoCancelamento`; o pagamento grava `ESTORNADO`, `estornadoEm` e a resposta do provedor.
 
-A devolução de estoque é a mesma da recusa do pagamento pelo webhook (`Estoque.devolverItensDe`).
+A devolução de estoque é a mesma da recusa do pagamento pelo webhook (`Estoque.devolverItensDe`). Os dois caminhos também devolvem os pontos de fidelidade resgatados no pedido.
 
 Ao contrário da solicitação de pagamento, o estorno é pedido ao provedor com o pedido já travado (`SELECT ... FOR UPDATE`). Se o estorno saísse antes da trava, uma entrega concluída no meio do caminho deixaria o dinheiro devolvido no provedor e o pedido `ENTREGUE` e pago na API. O custo é segurar uma conexão do banco durante a chamada, limitada pelo timeout e pelo número de tentativas do cliente HTTP. A chave é `estorno-<pedidoId>`: se a gravação falhar depois do estorno, a nova tentativa reenvia a mesma chave e o provedor devolve o mesmo estorno, sem estornar em dobro. Dois cancelamentos simultâneos esperam a trava, e o segundo recebe `409`.
 
@@ -307,6 +317,35 @@ Ao contrário da solicitação de pagamento, o estorno é pedido ao provedor com
 - Não há volta de status. Um toque errado (marcar como pronto antes da hora) não se desfaz, o que preserva o histórico do pedido mas exige cuidado na operação.
 - Um pagamento que fica `PENDENTE` para sempre (webhook perdido) impede o cancelamento do pedido. Resolver isso depende da conciliação de pagamentos, ainda não implementada.
 - O mock guarda os pagamentos em memória: depois de reiniciado, o estorno de um pagamento antigo responde `404` no mock e `502` na API.
+
+## Fidelidade
+
+O programa de pontos é opcional e depende de consentimento explícito, como pede o caso: *"conhecer o cliente é importante, mas respeitar sua privacidade é obrigatório"*.
+
+| Regra | Valor |
+|---|---|
+| Acúmulo | 1 ponto por real do total pago, creditado quando o pedido é `ENTREGUE` |
+| Resgate | R$ 0,05 por ponto, como desconto na criação do pedido (`pontosResgatados`) |
+| Limite do desconto | 50% do subtotal |
+
+As regras são constantes no model `FidelidadeConta` e voltam em `GET /api/v1/fidelidade`, para o app mostrá-las sem duplicar valores.
+
+```mermaid
+stateDiagram-v2
+    [*] --> SemAdesao
+    SemAdesao --> Ativa: POST /fidelidade/adesao { consentimento: true }
+    Ativa --> Ativa: entrega (ACUMULO), resgate (RESGATE), cancelamento (ESTORNO)
+    Ativa --> Revogada: DELETE /fidelidade/adesao (EXPIRACAO do saldo)
+    Revogada --> Ativa: nova adesão, saldo zero
+```
+
+- **Adesão é consentimento.** `POST /fidelidade/adesao` só aceita `{ "consentimento": true }`; qualquer outro corpo é `422`. A data fica em `users.consentimento_fidelidade_em`, a conta é aberta e a auditoria registra `fidelidade.aderida`. A base legal é o consentimento (LGPD, art. 7º, I), porque cruzar o histórico de consumo para dar benefícios não é necessário para vender um lanche.
+- **Pontos só na entrega.** Um pedido entregue não pode mais ser cancelado, então ponto ganho nunca precisa ser estornado. Creditar na aprovação do pagamento obrigaria a retirar os pontos num cancelamento posterior, e eles já poderiam ter sido gastos.
+- **O resgate sai na criação e volta no cancelamento.** Os pontos são debitados na mesma transação do pedido, com a conta travada (`SELECT ... FOR UPDATE`), e todo cancelamento (pelo cliente, pela operação ou pela recusa do pagamento) devolve o que foi resgatado com um movimento de `ESTORNO`. Há um teste que dispara dois pedidos simultâneos gastando o mesmo saldo e exige um `201` e um `409`; sem a trava, os dois passam.
+- **Revogar vale a qualquer momento** (art. 8º, § 5º). `DELETE /fidelidade/adesao` limpa a data do consentimento, zera o saldo com um movimento de `EXPIRACAO` e registra `fidelidade.revogada`. A conta e o extrato ficam, porque sustentam os descontos já concedidos em pedidos; a partir dali nada mais é acumulado nem resgatado, nem devolvido por cancelamento. Uma nova adesão reabre a mesma conta, com saldo zero.
+- **Extrato completo.** Todo lançamento é um movimento em `fidelidade_movimentos`, com o saldo resultante e o pedido de origem, consultado em `GET /fidelidade/movimentos`.
+
+Limitações conhecidas: os pontos não expiram por tempo (o tipo `EXPIRACAO` existe, mas só a revogação o usa), e as campanhas segmentadas por frequência, idade e perfil, citadas no caso, ficam para as promoções, que hoje só existem como tabela (`promocoes`).
 
 ## Auditoria
 
@@ -321,6 +360,7 @@ Toda ação sensível deixa um registro em `logs_auditoria`, que a matriz consul
 | `pedido.status_alterado` | todo avanço de status, inclusive a aprovação pelo webhook (com `usuarioId` nulo) |
 | `pedido.cancelado` | todo cancelamento, inclusive pela recusa do pagamento (com `usuarioId` nulo e o motivo da recusa), com o status de origem, o motivo, se houve estorno e se o estoque voltou |
 | `pagamento.solicitado`, `pagamento.aprovado`, `pagamento.recusado`, `pagamento.estornado` | ciclo do pagamento |
+| `fidelidade.aderida`, `fidelidade.revogada` | consentimento da fidelidade dado ou revogado; a revogação guarda os pontos perdidos |
 | `acesso.negado` | qualquer `403` da API, com método, rota, parâmetros e código do erro |
 
 - **Na mesma transação da ação.** O registro é gravado dentro da transação que muda o pedido ou o pagamento: ou os dois entram, ou nenhum. Uma ação que falha (estoque insuficiente, provedor fora do ar no estorno) não deixa registro de sucesso, e uma ação gravada nunca fica sem registro.
@@ -368,7 +408,7 @@ O pagamento é assíncrono, então as requisições `Mock:` chamam o provedor si
 
 ### Cenários
 
-Os cenários numerados são as requisições de mesmo nome na coleção (pasta/nome). As demais (logins de outros perfis, pedidos e pagamentos de apoio, chamadas ao mock) só preparam o cenário seguinte. São 18 positivos e 14 negativos.
+Os cenários numerados são as requisições de mesmo nome na coleção (pasta/nome). As demais (logins de outros perfis, pedidos e pagamentos de apoio, chamadas ao mock) só preparam o cenário seguinte. São 25 positivos e 17 negativos.
 
 | ID | Cenário | Endpoint | Entrada | Esperado | Pasta |
 |---|---|---|---|---|---|
@@ -404,6 +444,16 @@ Os cenários numerados são as requisições de mesmo nome na coleção (pasta/n
 | T30 | Pedido com estoque insuficiente | `POST /pedidos` | canjica (BOL002), saldo 0 | 409 `ESTOQUE_INSUFICIENTE`, saldo em `details` | Erros |
 | T31 | Transição de status inválida | `PATCH /pedidos/:id/status` | `EM_PREPARO` no pedido entregue | 409 `TRANSICAO_DE_STATUS_INVALIDA` | Erros |
 | T32 | Token revogado após logout | `GET /account/profile` | token de T01 depois do logout | 401 `NAO_AUTENTICADO` | Erros |
+| T33 | Consultar programa de fidelidade | `GET /fidelidade` | token do cliente do seed | 200, `ativa: true`, saldo e regras | Fidelidade |
+| T34 | Extrato com os pontos da entrega | `GET /fidelidade/movimentos` | `?page=1&limit=10` | 200, `ACUMULO` de 12 pontos do pedido de T07 | Fidelidade |
+| T35 | Pedido com resgate de pontos | `POST /pedidos` | 2 cafés, `pontosResgatados: 20` | 201, desconto `1.00`, total `11.00` | Fidelidade |
+| T36 | Cancelamento do pedido com resgate | `PATCH /pedidos/:id/status` | `CANCELADO` e motivo | 200, `CANCELADO` | Fidelidade |
+| T37 | Saldo restaurado após o cancelamento | `GET /fidelidade` | token do cliente do seed | 200, saldo igual ao de T33 | Fidelidade |
+| T38 | Adesão com consentimento | `POST /fidelidade/adesao` | `{ "consentimento": true }`, token de T01 | 201, `ativa: true`, saldo 0 | Fidelidade |
+| T39 | Revogação do consentimento | `DELETE /fidelidade/adesao` | token de T01 | 204 | Fidelidade |
+| T40 | Adesão sem consentimento | `POST /fidelidade/adesao` | `{ "consentimento": false }` | 422 `DADOS_INVALIDOS`, campo `consentimento` | Erros |
+| T41 | Resgate acima do saldo | `POST /pedidos` | `pontosResgatados: 99999` | 409 `SALDO_DE_PONTOS_INSUFICIENTE` | Erros |
+| T42 | Resgate sem adesão ativa | `POST /pedidos` | token de T01, depois de revogar | 409 `FIDELIDADE_INATIVA` | Erros |
 
 Além da coleção, a suíte automatizada da API (`npm test` em `api/`, com Japa) cobre as mesmas regras e as que a coleção não alcança, como pedidos e webhooks simultâneos e falhas do provedor.
 
