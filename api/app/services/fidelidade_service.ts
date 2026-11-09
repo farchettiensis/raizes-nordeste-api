@@ -15,10 +15,6 @@ export type ProgramaDoCliente = {
   conta: FidelidadeConta | null
 }
 
-function travarCliente(cliente: User, trx: TransactionClientContract) {
-  return User.query({ client: trx }).where('id', cliente.id).forUpdate().firstOrFail()
-}
-
 function fidelidadeInativa() {
   return new ApiException('O cliente nao participa do programa de fidelidade.', {
     code: 'FIDELIDADE_INATIVA',
@@ -88,7 +84,7 @@ export async function devolverPontosResgatados(pedido: Pedido, trx: TransactionC
   const conta =
     resgate && pedido.clienteId ? await FidelidadeConta.ativaTravadaDo(pedido.clienteId, trx) : null
 
-  if (!resgate || !conta) {
+  if (!resgate || !conta || !conta.vigenteDesde(resgate.createdAt)) {
     return
   }
 
@@ -117,7 +113,7 @@ export default class FidelidadeService {
 
   async aderir(cliente: User): Promise<ProgramaDoCliente> {
     const conta = await db.transaction(async (trx) => {
-      const travado = await travarCliente(cliente, trx)
+      const travado = await User.travadoParaAtualizar(cliente.id, trx)
 
       if (travado.consentiuFidelidade) {
         throw new ApiException('O cliente ja participa do programa de fidelidade.', {
@@ -130,11 +126,7 @@ export default class FidelidadeService {
       travado.consentimentoFidelidadeEm = agora
       await travado.save()
 
-      const aderida = await FidelidadeConta.updateOrCreate(
-        { clienteId: cliente.id },
-        { aderiuEm: agora, saldoPontos: 0 },
-        { client: trx }
-      )
+      const aderida = await this.abrirConta(cliente, agora, trx)
 
       await registrarAuditoria(
         {
@@ -154,7 +146,7 @@ export default class FidelidadeService {
 
   async revogar(cliente: User) {
     await db.transaction(async (trx) => {
-      const travado = await travarCliente(cliente, trx)
+      const travado = await User.travadoParaAtualizar(cliente.id, trx)
       const conta = await FidelidadeConta.ativaTravadaDo(cliente.id, trx)
 
       if (!conta) {
@@ -185,5 +177,29 @@ export default class FidelidadeService {
         trx
       )
     })
+  }
+
+  private async abrirConta(cliente: User, aderiuEm: DateTime, trx: TransactionClientContract) {
+    const existente = await FidelidadeConta.travadaDo(cliente.id, trx)
+
+    if (!existente) {
+      return FidelidadeConta.create(
+        { clienteId: cliente.id, aderiuEm, saldoPontos: 0 },
+        { client: trx }
+      )
+    }
+
+    if (existente.saldoPontos > 0) {
+      await existente.lancar({
+        tipo: 'EXPIRACAO',
+        pontos: -existente.saldoPontos,
+        descricao: 'Saldo anterior a nova adesao',
+      })
+    }
+
+    existente.aderiuEm = aderiuEm
+    await existente.save()
+
+    return existente
   }
 }

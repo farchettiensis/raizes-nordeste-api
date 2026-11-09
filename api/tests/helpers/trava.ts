@@ -8,7 +8,7 @@ import Pedido from '#models/pedido'
 async function comTrava<T>(
   travar: (trava: TransactionClientContract) => Promise<unknown>,
   disparar: () => Promise<T>,
-  enquantoTravado: () => Promise<void>
+  enquantoTravado: (trava: TransactionClientContract) => Promise<void>
 ) {
   const trava = await db.transaction()
 
@@ -16,7 +16,7 @@ async function comTrava<T>(
     await travar(trava)
     const emAndamento = disparar()
     await esperar(300)
-    await enquantoTravado()
+    await enquantoTravado(trava)
     await trava.commit()
 
     return await emAndamento
@@ -30,7 +30,7 @@ async function comTrava<T>(
 export function comPedidoTravado<T>(
   pedido: Pedido,
   disparar: () => Promise<T>,
-  enquantoTravado: () => Promise<void>
+  enquantoTravado: (trava: TransactionClientContract) => Promise<void>
 ) {
   return comTrava(
     (trava) => Pedido.query({ client: trava }).where('id', pedido.id).forUpdate().firstOrFail(),
@@ -42,7 +42,7 @@ export function comPedidoTravado<T>(
 export function comContaTravada<T>(
   conta: FidelidadeConta,
   disparar: () => Promise<T>,
-  enquantoTravado: () => Promise<void>
+  enquantoTravado: (trava: TransactionClientContract) => Promise<void>
 ) {
   return comTrava(
     (trava) =>

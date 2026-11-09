@@ -1,7 +1,9 @@
 import type { ApiClient } from '@japa/api-client'
 import { test } from '@japa/runner'
+import { setTimeout as esperar } from 'node:timers/promises'
 import app from '@adonisjs/core/services/app'
 import testUtils from '@adonisjs/core/services/test_utils'
+import db from '@adonisjs/lucid/services/db'
 
 import Estoque from '#models/estoque'
 import FidelidadeConta from '#models/fidelidade_conta'
@@ -10,7 +12,7 @@ import LogAuditoria from '#models/log_auditoria'
 import Pedido from '#models/pedido'
 import type Produto from '#models/produto'
 import type Unidade from '#models/unidade'
-import type User from '#models/user'
+import User from '#models/user'
 import { GatewayPagamento } from '#services/gateway_pagamento'
 import PagamentoService from '#services/pagamento_service'
 import PedidoService from '#services/pedido_service'
@@ -92,6 +94,36 @@ async function saldoDeEstoque(unidade: Unidade, produto: Produto) {
     .firstOrFail()
 
   return estoque.quantidade
+}
+
+async function entregar(client: ApiClient, cliente: User) {
+  const unidade = await criarUnidade()
+  const atendente = await criarUsuario('ATENDENTE', { unidadeId: unidade.id })
+  const pedido = await criarPedido(unidade, cliente, { status: 'PRONTO', total: '37.90' })
+
+  const response = await client
+    .patch(`/api/v1/pedidos/${pedido.id}/status`)
+    .json({ status: 'ENTREGUE' })
+    .loginAs(atendente)
+
+  return { response, pedido }
+}
+
+function pedirComPontos(
+  client: ApiClient,
+  cliente: User,
+  { unidade, produto }: { unidade: Unidade; produto: Produto },
+  pontosResgatados: unknown
+) {
+  return client
+    .post('/api/v1/pedidos')
+    .json({
+      unidadeId: unidade.id,
+      canalPedido: 'APP',
+      itens: [{ produtoId: produto.id, quantidade: 2 }],
+      pontosResgatados,
+    } as never)
+    .loginAs(cliente)
 }
 
 test.group('Adesao a fidelidade', (group) => {
@@ -262,19 +294,6 @@ test.group('Adesao a fidelidade', (group) => {
 test.group('Acumulo de pontos', (group) => {
   group.each.setup(() => testUtils.db().truncate())
 
-  async function entregar(client: ApiClient, cliente: User) {
-    const unidade = await criarUnidade()
-    const atendente = await criarUsuario('ATENDENTE', { unidadeId: unidade.id })
-    const pedido = await criarPedido(unidade, cliente, { status: 'PRONTO', total: '37.90' })
-
-    const response = await client
-      .patch(`/api/v1/pedidos/${pedido.id}/status`)
-      .json({ status: 'ENTREGUE' })
-      .loginAs(atendente)
-
-    return { response, pedido }
-  }
-
   test('a entrega credita um ponto por real pago', async ({ client, assert }) => {
     const cliente = await criarUsuario()
     const conta = await aderirAFidelidade(cliente, 5)
@@ -331,23 +350,6 @@ test.group('Resgate de pontos', (group) => {
 
     return testUtils.db().truncate()
   })
-
-  function pedirComPontos(
-    client: ApiClient,
-    cliente: User,
-    { unidade, produto }: { unidade: Unidade; produto: Produto },
-    pontosResgatados: unknown
-  ) {
-    return client
-      .post('/api/v1/pedidos')
-      .json({
-        unidadeId: unidade.id,
-        canalPedido: 'APP',
-        itens: [{ produtoId: produto.id, quantidade: 2 }],
-        pontosResgatados,
-      } as never)
-      .loginAs(cliente)
-  }
 
   test('o resgate vira desconto no pedido e sai do saldo', async ({ client, assert }) => {
     const cliente = await criarUsuario()
@@ -522,5 +524,98 @@ test.group('Resgate de pontos', (group) => {
     )
     await conta.refresh()
     assert.equal(conta.saldoPontos, 50)
+  })
+})
+
+test.group('Fidelidade sob concorrencia e nova adesao', (group) => {
+  group.each.setup(() => testUtils.db().truncate())
+
+  test('a trava do cliente na adesao nao bloqueia pedidos que o referenciam', async ({
+    assert,
+  }) => {
+    const cliente = await criarUsuario()
+    const unidade = await criarUnidade()
+    const trava = await db.transaction()
+
+    try {
+      await User.travadoParaAtualizar(cliente.id, trava)
+
+      const resultado = await Promise.race([
+        criarPedido(unidade, cliente).then(() => 'gravado'),
+        esperar(1000).then(() => 'bloqueado'),
+      ])
+
+      assert.equal(resultado, 'gravado')
+    } finally {
+      await trava.rollback()
+    }
+  })
+
+  test('a entrega que espera uma revogacao nao credita a conta revogada', async ({
+    client,
+    assert,
+  }) => {
+    const cliente = await criarUsuario()
+    const conta = await aderirAFidelidade(cliente, 50)
+
+    const { response } = await comContaTravada(
+      conta,
+      () => entregar(client, cliente),
+      async (trava) => {
+        await User.query({ client: trava })
+          .where('id', cliente.id)
+          .update({ consentimentoFidelidadeEm: null })
+        await FidelidadeConta.query({ client: trava })
+          .where('id', conta.id)
+          .update({ saldoPontos: 0 })
+      }
+    )
+
+    response.assertStatus(200)
+    await conta.refresh()
+    assert.equal(conta.saldoPontos, 0)
+    assert.lengthOf(await FidelidadeMovimento.query().where('tipo', 'ACUMULO'), 0)
+  })
+
+  test('pontos resgatados antes de revogar nao voltam depois de nova adesao', async ({
+    client,
+    assert,
+  }) => {
+    const cliente = await criarUsuario()
+    const conta = await aderirAFidelidade(cliente, 200)
+    const oferta = await cardapioCom('18.50')
+    const criado = await pedirComPontos(client, cliente, oferta, 100)
+    await client.delete('/api/v1/fidelidade/adesao').loginAs(cliente)
+    await client.post('/api/v1/fidelidade/adesao').json({ consentimento: true }).loginAs(cliente)
+
+    const response = await client
+      .patch(`/api/v1/pedidos/${corpo<PedidoRespondido>(criado).data.pedidoId}/status`)
+      .json({ status: 'CANCELADO', motivo: 'Desisti' })
+      .loginAs(cliente)
+
+    response.assertStatus(200)
+    await conta.refresh()
+    assert.equal(conta.saldoPontos, 0)
+    assert.lengthOf(await FidelidadeMovimento.query().where('tipo', 'ESTORNO'), 0)
+  })
+
+  test('a nova adesao zera um saldo remanescente pelo extrato', async ({ client, assert }) => {
+    const cliente = await criarUsuario()
+    const conta = await aderirAFidelidade(cliente, 30)
+    cliente.consentimentoFidelidadeEm = null
+    await cliente.save()
+
+    const response = await client
+      .post('/api/v1/fidelidade/adesao')
+      .json({ consentimento: true })
+      .loginAs(cliente)
+
+    response.assertStatus(201)
+    await conta.refresh()
+    assert.equal(conta.saldoPontos, 0)
+    const [expiracao] = await movimentosDe(cliente)
+    assert.equal(expiracao.tipo, 'EXPIRACAO')
+    assert.equal(expiracao.pontos, -30)
+    assert.equal(expiracao.saldoResultante, 0)
   })
 })

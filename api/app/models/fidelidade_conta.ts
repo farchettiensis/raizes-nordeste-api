@@ -1,6 +1,7 @@
 import { belongsTo, hasMany } from '@adonisjs/lucid/orm'
 import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import type { BelongsTo, HasMany } from '@adonisjs/lucid/types/relations'
+import type { DateTime } from 'luxon'
 import { FidelidadeContaSchema } from '#database/schema'
 import FidelidadeMovimento, { type TipoMovimentoFidelidade } from '#models/fidelidade_movimento'
 import User from '#models/user'
@@ -25,12 +26,18 @@ export default class FidelidadeConta extends FidelidadeContaSchema {
   @hasMany(() => FidelidadeMovimento, { foreignKey: 'contaId' })
   declare movimentos: HasMany<typeof FidelidadeMovimento>
 
-  static ativaTravadaDo(clienteId: number, trx: TransactionClientContract) {
-    return this.query({ client: trx })
-      .where('clienteId', clienteId)
-      .whereHas('cliente', (cliente) => cliente.whereNotNull('consentimentoFidelidadeEm'))
-      .forUpdate()
+  static travadaDo(clienteId: number, trx: TransactionClientContract) {
+    return this.query({ client: trx }).where('clienteId', clienteId).forUpdate().first()
+  }
+
+  static async ativaTravadaDo(clienteId: number, trx: TransactionClientContract) {
+    const conta = await this.travadaDo(clienteId, trx)
+    const consentiu = await User.query({ client: trx })
+      .where('id', clienteId)
+      .whereNotNull('consentimentoFidelidadeEm')
       .first()
+
+    return conta && consentiu ? conta : null
   }
 
   static pontosDaCompra(totalEmCentavos: number) {
@@ -45,6 +52,10 @@ export default class FidelidadeConta extends FidelidadeContaSchema {
     const limiteEmCentavos = (subtotalEmCentavos * LIMITE_DE_DESCONTO_PERCENTUAL) / 100
 
     return Math.floor(limiteEmCentavos / VALOR_DO_PONTO_EM_CENTAVOS)
+  }
+
+  vigenteDesde(momento: DateTime) {
+    return this.aderiuEm <= momento
   }
 
   podeResgatar(pontos: number) {

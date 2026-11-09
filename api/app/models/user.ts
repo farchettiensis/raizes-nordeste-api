@@ -2,6 +2,7 @@ import hash from '@adonisjs/core/services/hash'
 import { compose } from '@adonisjs/core/helpers'
 import { belongsTo, hasMany, hasOne } from '@adonisjs/lucid/orm'
 import { withAuthFinder } from '@adonisjs/auth/mixins/lucid'
+import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import type { BelongsTo, HasMany, HasOne } from '@adonisjs/lucid/types/relations'
 import { type AccessToken, DbAccessTokensProvider } from '@adonisjs/auth/access_tokens'
 
@@ -32,6 +33,13 @@ export default class User extends compose(UserSchema, withAuthFinder(hash)) {
 
   @hasOne(() => FidelidadeConta, { foreignKey: 'clienteId' })
   declare fidelidade: HasOne<typeof FidelidadeConta>
+
+  static travadoParaAtualizar(id: number, trx: TransactionClientContract) {
+    const query = this.query({ client: trx }).where('id', id)
+    query.knexQuery.forNoKeyUpdate()
+
+    return query.firstOrFail()
+  }
 
   get initials() {
     const [first, last] = this.fullName ? this.fullName.split(' ') : this.email.split('@')
