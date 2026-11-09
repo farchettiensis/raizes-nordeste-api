@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Raízes do Nordeste API",
-    "description": "Plano de testes da API Raízes do Nordeste. Rode a coleção inteira, em ordem, com a API e o pagamento mock no ar (`docker compose up --build` na raiz do repositório, com os dados de demonstração). As pastas dependem umas das outras: os scripts guardam tokens e ids em variáveis da coleção.\n\nVariáveis a ajustar, se necessário: `baseUrl` (API) e `mockUrl` (pagamento mock).\n\nOs cenários numerados (T01 a T32) estão descritos na tabela do README.",
+    "description": "Plano de testes da API Raízes do Nordeste. Rode a coleção inteira, em ordem, com a API e o pagamento mock no ar (`docker compose up --build` na raiz do repositório, com os dados de demonstração). As pastas dependem umas das outras: os scripts guardam tokens e ids em variáveis da coleção.\n\nVariáveis a ajustar, se necessário: `baseUrl` (API) e `mockUrl` (pagamento mock).\n\nOs cenários numerados (T01 a T42) estão descritos na tabela do README.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -1838,6 +1838,406 @@
       ]
     },
     {
+      "name": "Fidelidade",
+      "description": "Programa de pontos: o pedido entregue na pasta Status gerou pontos, o resgate vira desconto e volta no cancelamento, e o cliente novo adere e revoga o consentimento.",
+      "item": [
+        {
+          "name": "T33 Consultar programa de fidelidade",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const programa = pm.response.json().data;",
+                  "pm.test('Adesão ativa', () => pm.expect(programa.ativa).to.eql(true));",
+                  "pm.test('Traz as regras', () => pm.expect(programa.regras).to.eql({ pontosPorReal: 1, valorDoPonto: '0.05', limiteDeDescontoPercentual: 50 }));",
+                  "pm.collectionVariables.set('saldoPontos', programa.saldoPontos);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/fidelidade",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "fidelidade"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clienteToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "O cliente do seed já aderiu. Esperado: 200 com `ativa: true`, o saldo e as regras. Guarda o saldo para conferir a devolução do resgate."
+          }
+        },
+        {
+          "name": "T34 Extrato com os pontos da entrega",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const movimentos = pm.response.json().data;",
+                  "pm.test('Acúmulo da entrega', () => {",
+                  "  const acumulo = movimentos.find((m) => m.pedidoId === Number(pm.collectionVariables.get('pedidoId')));",
+                  "  pm.expect(acumulo.tipo).to.eql('ACUMULO');",
+                  "  pm.expect(acumulo.pontos).to.eql(12);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/fidelidade/movimentos?page=1&limit=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "fidelidade",
+                "movimentos"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clienteToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "O pedido de T07 (R$ 12,00) foi entregue em T15. Esperado: 200 com um ACUMULO de 12 pontos ligado a ele."
+          }
+        },
+        {
+          "name": "T35 Pedido com resgate de pontos",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const pedido = pm.response.json().data;",
+                  "pm.test('Desconto pelos pontos', () => {",
+                  "  pm.expect(pedido.desconto).to.eql('1.00');",
+                  "  pm.expect(pedido.total).to.eql('11.00');",
+                  "});",
+                  "pm.collectionVariables.set('pedidoResgateId', pedido.pedidoId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pedidos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pedidos"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clienteToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "20 pontos valem R$ 1,00. Esperado: 201 com desconto 1.00 e total 11.00.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"unidadeId\": {{unidadeId}},\n  \"canalPedido\": \"APP\",\n  \"itens\": [\n    {\n      \"produtoId\": {{produtoId}},\n      \"quantidade\": 2\n    }\n  ],\n  \"pontosResgatados\": 20\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "T36 Cancelamento do pedido com resgate",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Pedido CANCELADO', () => pm.expect(pm.response.json().data.status).to.eql('CANCELADO'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pedidos/{{pedidoResgateId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pedidos",
+                "{{pedidoResgateId}}",
+                "status"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clienteToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Esperado: 200 com o pedido CANCELADO; os pontos resgatados voltam ao saldo.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"CANCELADO\",\n  \"motivo\": \"Mudei de ideia\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "T37 Saldo restaurado após o cancelamento",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Pontos devolvidos', () => {",
+                  "  pm.expect(pm.response.json().data.saldoPontos).to.eql(Number(pm.collectionVariables.get('saldoPontos')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/fidelidade",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "fidelidade"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clienteToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Esperado: 200 com o mesmo saldo de T33."
+          }
+        },
+        {
+          "name": "T38 Adesão com consentimento",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const programa = pm.response.json().data;",
+                  "pm.test('Adesão ativa com saldo zero', () => {",
+                  "  pm.expect(programa.ativa).to.eql(true);",
+                  "  pm.expect(programa.saldoPontos).to.eql(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/fidelidade/adesao",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "fidelidade",
+                "adesao"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{novoClienteToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "O cliente cadastrado em T01 consente e adere. Esperado: 201 com `ativa: true` e saldo zero.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"consentimento\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "T39 Revogação do consentimento",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/fidelidade/adesao",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "fidelidade",
+                "adesao"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{novoClienteToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "A revogação vale a qualquer momento. Esperado: 204."
+          }
+        }
+      ]
+    },
+    {
       "name": "Erros",
       "description": "Cenários negativos. Todos respondem no padrão de erro da API, conferido pelo script da coleção.",
       "item": [
@@ -2584,6 +2984,194 @@
           }
         },
         {
+          "name": "T40 Adesão sem consentimento",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 422', () => pm.response.to.have.status(422));",
+                  "pm.test('error DADOS_INVALIDOS', () => pm.expect(pm.response.json().error).to.eql('DADOS_INVALIDOS'));",
+                  "",
+                  "pm.test('details aponta o campo consentimento', () => {",
+                  "  const campos = pm.response.json().details.map((d) => d.field);",
+                  "  pm.expect(campos).to.include('consentimento');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/fidelidade/adesao",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "fidelidade",
+                "adesao"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{novoClienteToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "O consentimento precisa ser explícito. Esperado: 422 DADOS_INVALIDOS apontando `consentimento`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"consentimento\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "T41 Resgate acima do saldo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 409', () => pm.response.to.have.status(409));",
+                  "pm.test('error SALDO_DE_PONTOS_INSUFICIENTE', () => pm.expect(pm.response.json().error).to.eql('SALDO_DE_PONTOS_INSUFICIENTE'));",
+                  "",
+                  "pm.test('details aponta o campo pontosResgatados', () => {",
+                  "  const campos = pm.response.json().details.map((d) => d.field);",
+                  "  pm.expect(campos).to.include('pontosResgatados');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pedidos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pedidos"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{clienteToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Esperado: 409 SALDO_DE_PONTOS_INSUFICIENTE com o saldo em `details`.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"unidadeId\": {{unidadeId}},\n  \"canalPedido\": \"APP\",\n  \"itens\": [\n    {\n      \"produtoId\": {{produtoId}},\n      \"quantidade\": 1\n    }\n  ],\n  \"pontosResgatados\": 99999\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "T42 Resgate sem adesão ativa",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 409', () => pm.response.to.have.status(409));",
+                  "pm.test('error FIDELIDADE_INATIVA', () => pm.expect(pm.response.json().error).to.eql('FIDELIDADE_INATIVA'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/pedidos",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "pedidos"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{novoClienteToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "O cliente de T01 revogou em T39. Esperado: 409 FIDELIDADE_INATIVA.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"unidadeId\": {{unidadeId}},\n  \"canalPedido\": \"APP\",\n  \"itens\": [\n    {\n      \"produtoId\": {{produtoId}},\n      \"quantidade\": 1\n    }\n  ],\n  \"pontosResgatados\": 10\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
           "name": "Logout do cliente cadastrado",
           "event": [
             {
@@ -2777,6 +3365,16 @@
     },
     {
       "key": "referenciaEstorno",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "saldoPontos",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "pedidoResgateId",
       "value": "",
       "type": "string"
     }
