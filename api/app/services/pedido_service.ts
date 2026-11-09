@@ -242,9 +242,13 @@ export default class PedidoService {
     })
 
     const subtotalDoPedido = itens.reduce((soma, item) => soma + item.subtotalEmCentavos, 0)
-    const pontos = dados.pontosResgatados
-    const conta = pontos ? await resgatarPontos(cliente, pontos, subtotalDoPedido, trx) : null
-    const descontoEmCentavos = pontos ? FidelidadeConta.descontoEmCentavos(pontos) : 0
+    const resgate = dados.pontosResgatados
+      ? {
+          pontos: dados.pontosResgatados,
+          conta: await resgatarPontos(cliente, dados.pontosResgatados, subtotalDoPedido, trx),
+        }
+      : null
+    const descontoEmCentavos = resgate ? FidelidadeConta.descontoEmCentavos(resgate.pontos) : 0
 
     const pedido = await Pedido.create(
       {
@@ -270,10 +274,10 @@ export default class PedidoService {
 
     await this.baixarEstoque(pedido, cliente, dados.itens, estoques, trx)
 
-    if (conta) {
-      await conta.lancar({
+    if (resgate) {
+      await resgate.conta.lancar({
         tipo: 'RESGATE',
-        pontos: -pontos!,
+        pontos: -resgate.pontos,
         pedidoId: pedido.id,
         descricao: `Resgate no pedido ${pedido.codigo}`,
       })
