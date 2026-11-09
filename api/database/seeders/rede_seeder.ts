@@ -2,6 +2,7 @@ import { DateTime } from 'luxon'
 import { BaseSeeder } from '@adonisjs/lucid/seeders'
 
 import Estoque from '#models/estoque'
+import FidelidadeConta from '#models/fidelidade_conta'
 import Produto from '#models/produto'
 import Unidade from '#models/unidade'
 import UnidadeProduto from '#models/unidade_produto'
@@ -167,6 +168,8 @@ const EQUIPE = [
 
 const SENHA_PADRAO = 'Senha@123'
 
+const PONTOS_DE_DEMONSTRACAO = 200
+
 export default class extends BaseSeeder {
   async run() {
     const unidades = await Unidade.updateOrCreateMany('codigo', UNIDADES)
@@ -210,7 +213,7 @@ export default class extends BaseSeeder {
       )
     }
 
-    await User.updateOrCreate(
+    const cliente = await User.updateOrCreate(
       { email: 'cliente@raizes.test' },
       {
         fullName: 'Joana Cliente',
@@ -220,5 +223,25 @@ export default class extends BaseSeeder {
         consentimentoFidelidadeEm: DateTime.now(),
       }
     )
+
+    await this.abrirFidelidadeDe(cliente)
+  }
+
+  private async abrirFidelidadeDe(cliente: User) {
+    if (await FidelidadeConta.findBy('clienteId', cliente.id)) {
+      return
+    }
+
+    const conta = await FidelidadeConta.create({
+      clienteId: cliente.id,
+      saldoPontos: 0,
+      aderiuEm: DateTime.now(),
+    })
+
+    await conta.lancar({
+      tipo: 'ACUMULO',
+      pontos: PONTOS_DE_DEMONSTRACAO,
+      descricao: 'Saldo inicial de demonstracao',
+    })
   }
 }
