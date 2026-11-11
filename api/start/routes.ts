@@ -70,6 +70,11 @@ router
       .use(middleware.perfil({ perfis: ['CLIENTE'] }))
 
     router
+      .delete('clientes/conta', [controllers.ClienteConta, 'destroy'])
+      .as('clientes.conta.destroy')
+      .use(middleware.perfil({ perfis: ['CLIENTE'] }))
+
+    router
       .get('auditoria', [controllers.Auditoria, 'index'])
       .as('auditoria.index')
       .use(middleware.perfil({ perfis: ['ADMIN'] }))

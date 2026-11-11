@@ -47,7 +47,12 @@ export default class AccessTokensController {
 
   private async verificar(email: string, password: string) {
     try {
-      return await User.verifyCredentials(email, password)
+      const usuario = await User.verifyCredentials(email, password)
+      if (usuario.anonimizadoEm) {
+        throw new errors.E_INVALID_CREDENTIALS('E-mail ou senha invalidos.')
+      }
+
+      return usuario
     } catch (erro) {
       if (erro instanceof errors.E_INVALID_CREDENTIALS) {
         const alvo = await User.findBy('email', email).catch(() => null)

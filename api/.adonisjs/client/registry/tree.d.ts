@@ -48,6 +48,11 @@ export interface ApiDefinition {
       destroy: typeof routes['fidelidade.adesao.destroy']
     }
   }
+  clientes: {
+    conta: {
+      destroy: typeof routes['clientes.conta.destroy']
+    }
+  }
   auditoria: {
     index: typeof routes['auditoria.index']
   }

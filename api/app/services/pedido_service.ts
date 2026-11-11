@@ -10,7 +10,7 @@ import MovimentacaoEstoque from '#models/movimentacao_estoque'
 import Pedido, { type CanalPedido, type StatusPedido } from '#models/pedido'
 import Unidade from '#models/unidade'
 import UnidadeProduto from '#models/unidade_produto'
-import type User from '#models/user'
+import User from '#models/user'
 import { registrarAuditoria } from '#services/auditoria'
 import { emCentavos, emReais } from '#services/centavos'
 import { creditarPontosDaEntrega, resgatarPontos } from '#services/fidelidade_service'
@@ -108,11 +108,12 @@ export default class PedidoService {
 
   async criar(cliente: User, dados: NovoPedido) {
     const pedido = await db.transaction(async (trx) => {
+      const ativo = await User.travadoParaAtualizar(cliente.id, trx)
       const unidade = await this.unidadeAberta(dados.unidadeId, trx)
       const ofertas = await this.ofertasVendaveis(unidade, dados.itens, trx)
       const estoques = await this.reservarEstoque(unidade, dados.itens, trx)
 
-      return this.registrar(cliente, dados, { ofertas, estoques }, trx)
+      return this.registrar(ativo, dados, { ofertas, estoques }, trx)
     })
 
     await pedido.load('itens', (itens) => itens.orderBy('id'))

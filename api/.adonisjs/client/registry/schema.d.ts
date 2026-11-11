@@ -223,6 +223,18 @@ export interface Registry {
       errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/fidelidade_adesoes_controller').default['destroy']>>>
     }
   }
+  'clientes.conta.destroy': {
+    methods: ["DELETE"]
+    pattern: '/api/v1/clientes/conta'
+    types: {
+      body: ExtractBody<InferInput<(typeof import('#validators/user').anonimizarContaValidator)>>
+      paramsTuple: []
+      params: {}
+      query: ExtractQuery<InferInput<(typeof import('#validators/user').anonimizarContaValidator)>>
+      response: ExtractResponse<Awaited<ReturnType<import('#controllers/cliente_conta_controller').default['destroy']>>>
+      errorResponse: ExtractErrorResponse<Awaited<ReturnType<import('#controllers/cliente_conta_controller').default['destroy']>>> | { status: 422; response: { errors: SimpleError[] } }
+    }
+  }
   'auditoria.index': {
     methods: ["GET","HEAD"]
     pattern: '/api/v1/auditoria'

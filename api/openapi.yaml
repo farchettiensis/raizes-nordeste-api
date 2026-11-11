@@ -56,6 +56,7 @@ paths:
               email: francisca@raizes.test
               password: Senha@123
               passwordConfirmation: Senha@123
+              consentimentoDados: true
       responses:
         '201':
           description: Conta criada
@@ -89,6 +90,40 @@ paths:
                 $ref: '#/components/schemas/RespostaAutenticacao'
         '401':
           $ref: '#/components/responses/CredenciaisInvalidas'
+        '422':
+          $ref: '#/components/responses/DadosInvalidos'
+
+  /api/v1/clientes/conta:
+    delete:
+      tags: [Conta]
+      summary: Encerra e anonimiza o cadastro do proprio cliente
+      description: |
+        Exclusivo para CLIENTE. Confirma a senha atual, remove identificadores do cadastro,
+        revoga todos os tokens e consentimentos e expira o saldo de fidelidade.
+        Remove observacoes dos pedidos e IP/requestId da auditoria vinculada ao cliente.
+        Pedidos, pagamentos e movimentos permanecem com os identificadores internos.
+        Essa preservacao limita a anonimizacao a remocao dos identificadores diretos.
+        A operacao e irreversivel e nao encerra contas de equipe.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+                  format: password
+            example:
+              password: Senha@123
+      responses:
+        '204':
+          description: Conta encerrada e tokens revogados
+        '401':
+          $ref: '#/components/responses/ConfirmacaoDeContaInvalida'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
         '422':
           $ref: '#/components/responses/DadosInvalidos'
 
@@ -709,6 +744,7 @@ paths:
             enum:
               [
                 usuario.cadastrado,
+                usuario.anonimizado,
                 auth.login,
                 auth.login_negado,
                 auth.logout,
@@ -868,6 +904,7 @@ components:
           enum:
             [
               usuario.cadastrado,
+              usuario.anonimizado,
               auth.login,
               auth.login_negado,
               auth.logout,
@@ -1433,9 +1470,14 @@ components:
           example: DF
 
     NovaConta:
+      description: Consentimento especifico para manter o cadastro; nao inclui fidelidade nem marketing.
       type: object
-      required: [fullName, email, password, passwordConfirmation]
+      required: [fullName, email, password, passwordConfirmation, consentimentoDados]
       properties:
+        consentimentoDados:
+          type: boolean
+          enum: [true]
+          description: Autoriza o tratamento do cadastro conforme a secao LGPD do README.
         fullName:
           type: string
           nullable: true
@@ -1497,6 +1539,13 @@ components:
             timestamp: '2026-02-05T12:00:00.000Z'
             path: /api/v1/auth/signup
             requestId: 33be9a44-6849-439c-960c-cb2d995aa732
+
+    ConfirmacaoDeContaInvalida:
+      description: Token ausente ou invalido, ou senha incorreta
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
 
     CredenciaisInvalidas:
       description: E-mail ou senha invalidos

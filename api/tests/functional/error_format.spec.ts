@@ -81,6 +81,7 @@ test.group('Formato padrao de erro', (group) => {
       email: 'nao-e-um-email',
       password: 'curta',
       passwordConfirmation: 'outra',
+      consentimentoDados: true,
     })
 
     response.assertStatus(422)

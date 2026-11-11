@@ -227,6 +227,7 @@ test.group('Auditoria da autenticacao', (group) => {
       email: 'maria@raizes.test',
       password: 'Senha@123',
       passwordConfirmation: 'Senha@123',
+      consentimentoDados: true,
     })
 
     response.assertStatus(201)

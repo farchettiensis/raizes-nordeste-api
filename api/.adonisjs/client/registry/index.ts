@@ -114,6 +114,12 @@ const routes = {
     tokens: [{"old":"/api/v1/fidelidade/adesao","type":0,"val":"api","end":""},{"old":"/api/v1/fidelidade/adesao","type":0,"val":"v1","end":""},{"old":"/api/v1/fidelidade/adesao","type":0,"val":"fidelidade","end":""},{"old":"/api/v1/fidelidade/adesao","type":0,"val":"adesao","end":""}],
     types: placeholder as Registry['fidelidade.adesao.destroy']['types'],
   },
+  'clientes.conta.destroy': {
+    methods: ["DELETE"],
+    pattern: '/api/v1/clientes/conta',
+    tokens: [{"old":"/api/v1/clientes/conta","type":0,"val":"api","end":""},{"old":"/api/v1/clientes/conta","type":0,"val":"v1","end":""},{"old":"/api/v1/clientes/conta","type":0,"val":"clientes","end":""},{"old":"/api/v1/clientes/conta","type":0,"val":"conta","end":""}],
+    types: placeholder as Registry['clientes.conta.destroy']['types'],
+  },
   'auditoria.index': {
     methods: ["GET","HEAD"],
     pattern: '/api/v1/auditoria',

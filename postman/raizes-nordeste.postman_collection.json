@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Raízes do Nordeste API",
-    "description": "Plano de testes da API Raízes do Nordeste. Rode a coleção inteira, em ordem, com a API e o pagamento mock no ar (`docker compose up --build` na raiz do repositório, com os dados de demonstração). As pastas dependem umas das outras: os scripts guardam tokens e ids em variáveis da coleção.\n\nVariáveis a ajustar, se necessário: `baseUrl` (API) e `mockUrl` (pagamento mock).\n\nOs cenários numerados (T01 a T42) estão descritos na tabela do README.",
+    "description": "Plano de testes da API Raízes do Nordeste. Rode a coleção inteira, em ordem, com a API e o pagamento mock no ar (`docker compose up --build` na raiz do repositório, com os dados de demonstração). As pastas dependem umas das outras: os scripts guardam tokens e ids em variáveis da coleção.\n\nVariáveis a ajustar, se necessário: `baseUrl` (API) e `mockUrl` (pagamento mock).\n\nOs cenários numerados (T01 a T44) estão descritos na tabela do README.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -86,7 +86,7 @@
             "description": "Cria uma conta de cliente com e-mail aleatório, para a coleção poder rodar várias vezes. Esperado: 201 com token, sem a senha na resposta.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"fullName\": \"Cliente da Coleção\",\n  \"email\": \"{{emailNovoCliente}}\",\n  \"password\": \"Senha@123\",\n  \"passwordConfirmation\": \"Senha@123\"\n}",
+              "raw": "{\n  \"fullName\": \"Cliente da Coleção\",\n  \"email\": \"{{emailNovoCliente}}\",\n  \"password\": \"Senha@123\",\n  \"passwordConfirmation\": \"Senha@123\",\n  \"consentimentoDados\": true\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -2680,7 +2680,7 @@
             "description": "Formato inválido. Esperado: 422 DADOS_INVALIDOS apontando `email`.",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"fullName\": null,\n  \"email\": \"nao-e-email\",\n  \"password\": \"Senha@123\",\n  \"passwordConfirmation\": \"Senha@123\"\n}",
+              "raw": "{\n  \"fullName\": null,\n  \"email\": \"nao-e-email\",\n  \"password\": \"Senha@123\",\n  \"passwordConfirmation\": \"Senha@123\",\n  \"consentimentoDados\": true\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -3263,6 +3263,115 @@
             },
             "description": "Esperado: 401 NAO_AUTENTICADO com o token já revogado."
           }
+        }
+      ]
+    },
+    {
+      "name": "LGPD",
+      "description": "Encerra somente o cliente aleatório criado em T01, sem alterar as contas do seed.",
+      "item": [
+        {
+          "name": "T43 Encerrar cadastro do cliente novo",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{novoClienteToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/clientes/conta",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "clientes",
+                "conta"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"Senha@123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "T44 Token da conta encerrada",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{novoClienteToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/account/profile",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "account",
+                "profile"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
         }
       ]
     }

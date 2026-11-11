@@ -5,6 +5,7 @@ import User from '#models/user'
 
 export const ACOES_AUDITORIA = [
   'usuario.cadastrado',
+  'usuario.anonimizado',
   'auth.login',
   'auth.login_negado',
   'auth.logout',

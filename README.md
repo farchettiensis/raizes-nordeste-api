@@ -139,6 +139,7 @@ O Swagger em `/docs` traz os exemplos de request e response de cada um. Esta tab
 | POST | `/api/v1/auth/login` | pública | Autentica e devolve token |
 | GET | `/api/v1/account/profile` | token | Dados da conta autenticada |
 | POST | `/api/v1/account/logout` | token | Revoga o token em uso |
+| DELETE | `/api/v1/clientes/conta` | token, perfil CLIENTE e senha atual | Encerra e anonimiza o próprio cadastro |
 | GET | `/api/v1/unidades` | pública | Lista unidades, com filtros e paginação |
 | GET | `/api/v1/unidades/:id` | pública | Detalhe de uma unidade |
 | GET | `/api/v1/unidades/:id/cardapio` | pública | Cardápio da unidade, com preço e disponibilidade |
@@ -345,7 +346,49 @@ stateDiagram-v2
 - **Revogar vale a qualquer momento** (art. 8º, § 5º). `DELETE /fidelidade/adesao` limpa a data do consentimento, zera o saldo com um movimento de `EXPIRACAO` e registra `fidelidade.revogada`. A conta e o extrato ficam, porque sustentam os descontos já concedidos em pedidos; a partir dali nada mais é acumulado nem resgatado, nem devolvido por cancelamento. Uma nova adesão reabre a mesma conta, com saldo zero.
 - **Extrato completo.** Todo lançamento é um movimento em `fidelidade_movimentos`, com o saldo resultante e o pedido de origem, consultado em `GET /fidelidade/movimentos`.
 
-Limitações conhecidas: os pontos não expiram por tempo (o tipo `EXPIRACAO` existe, mas só a revogação o usa), e as campanhas segmentadas por frequência, idade e perfil, citadas no caso, ficam para as promoções, que hoje só existem como tabela (`promocoes`).
+Limitações conhecidas: os pontos não expiram por tempo (o tipo `EXPIRACAO` existe, mas só a revogação e o encerramento de conta o usam), e as campanhas segmentadas por frequência, idade e perfil, citadas no caso, ficam para as promoções, que hoje só existem como tabela (`promocoes`).
+
+## LGPD e privacidade
+
+O cadastro exige `consentimentoDados: true`. A finalidade desse aceite é manter a conta identificada por e-mail para autenticação, consulta de pedidos e atendimento. O cliente deve receber esta informação antes de aceitar; sem o aceite, o signup responde `422` e não cria a conta. Ele não autoriza marketing nem adesão à fidelidade. Consultar unidades e cardápios continua público.
+
+| Dados tratados | Finalidade | Base legal adotada no projeto |
+|---|---|---|
+| E-mail, nome (pode ser nulo), hash da senha e data do cadastro | Manter a conta e autenticar o cliente | Consentimento específico para o cadastro (art. 7º, I) |
+| Identificador do cliente, unidade, canal, itens, valores e status dos pedidos e pagamentos | Executar a compra, acompanhar preparo, pagamento e cancelamento | Execução de contrato (art. 7º, V) |
+| Adesão, saldo e movimentos de pontos | Conceder e resgatar benefícios opcionais | Consentimento separado (art. 7º, I) |
+| Identificadores, ação, horário, IP e requestId de auditoria | Investigar acessos indevidos e rastrear ações sensíveis | Legítimo interesse em segurança (art. 7º, IX), limitado à finalidade e ao acesso ADMIN |
+
+O modelo ainda prevê telefone, nascimento e consentimento de marketing, mas o cadastro público não recebe esses campos. Não há campanha de marketing implementada nem coleta de CPF, endereço residencial ou dados de cartão. Observações de pedidos são texto livre para instruções de preparo: não devem conter dados pessoais ou de saúde. A API não faz classificação automática desse texto.
+
+### Registro e revogação do consentimento
+
+`POST /api/v1/auth/signup` aceita somente o booleano literal `true` em `consentimentoDados`. O servidor grava o instante em `users.consentimento_dados_em`, na mesma transação do cadastro e do evento `usuario.cadastrado`. Datas enviadas pelo cliente não são usadas. Contas anteriores com data nula não recebem consentimento retroativo. O seed contém somente pessoas fictícias para demonstração.
+
+A fidelidade mantém seu próprio aceite em `consentimento_fidelidade_em`, com revogação por `DELETE /api/v1/fidelidade/adesao`. O encerramento da conta revoga todos os consentimentos. Os marcos atuais são limpos, enquanto a trilha de cadastro, adesão, revogação e encerramento preserva os horários das ações. O projeto registra o aceite e a data, mas ainda não versiona o aviso de privacidade aceito.
+
+### Encerramento e anonimização do cadastro
+
+O próprio CLIENTE chama `DELETE /api/v1/clientes/conta`, com seu token e `{ "password": "senha atual" }`. A senha confirma a intenção antes da operação irreversível. Equipe recebe `403`; token inválido ou senha errada recebe `401`; corpo sem senha recebe `422`. Não há parâmetro de usuário: a conta alvo é sempre a autenticada.
+
+Em uma transação, a API remove nome, telefone, nascimento e consentimentos, substitui o e-mail por um identificador aleatório no domínio não entregável `.invalid`, troca a senha por um segredo aleatório e preenche `anonimizado_em`. Também revoga todos os tokens, expira o saldo de fidelidade, limpa as observações dos pedidos e remove IP/requestId dos registros de auditoria cujo autor ou conta alvo é o cliente. O evento `usuario.anonimizado` comprova o encerramento sem registrar os identificadores removidos. Uma falha desfaz todas essas alterações.
+
+A resposta é `204`, sem dados pessoais. Os tokens deixam de acessar a API e as credenciais antigas não permitem novo login. O e-mail anterior pode ser usado em um novo cadastro independente, sem recuperar pedidos ou pontos da conta encerrada. Pedidos em andamento seguem seu fluxo operacional normal; o encerramento não cancela compras nem solicita estornos.
+
+Pedidos, pagamentos, movimentos de estoque e fidelidade e auditoria permanecem vinculados às chaves internas para preservar a consistência e a rastreabilidade. Isso remove os identificadores diretos do cadastro, mas mantém um histórico pseudonimizado: não se afirma anonimização irreversível de toda a base. Motivos de cancelamento, dados operacionais e correlações com sistemas externos ainda podem permitir identificação indireta. O endpoint não apaga logs externos nem cópias de segurança.
+
+### Estratégia de retenção
+
+| Conjunto | Estratégia |
+|---|---|
+| Cadastro identificado | Enquanto a conta estiver ativa; remoção dos identificadores diretos imediatamente após solicitação autenticada |
+| Pedidos, pagamentos e movimentos | Preservar o histórico pseudonimizado após o encerramento; proposta de revisão e expurgo após 5 anos, ressalvadas necessidades justificadas de guarda |
+| Auditoria | Proposta de revisão e expurgo após 6 meses, com acesso restrito; IP/requestId associados à conta são removidos já no encerramento |
+| Backups e logs de infraestrutura | Proposta de rotação em até 30 dias e reaplicação dos encerramentos após restauração, antes de liberar acesso |
+
+Os prazos são escolhas propostas para o projeto acadêmico, não afirmações de prazos legais obrigatórios. Não há rotina automática de expurgo, gestão de backups ou controle de restauração implementados. Uma implantação real precisa definir e executar essa política conforme suas finalidades e obrigações de guarda.
+
+As respostas usam transformers com lista explícita de campos e não expõem hash de senha, token armazenado, telefone ou nascimento. A senha usa hash e o token é armazenado como hash. A base conceitual está na [LGPD disponibilizada pelo Ministério da Justiça](https://www.gov.br/mj/pt-br/assuntos/sua-protecao/sedigi/Lei13709.pdf) e nas orientações da [ANPD sobre direitos dos titulares](https://www.gov.br/anpd/pt-br/assuntos/titular-de-dados-1/direito-dos-titulares).
 
 ## Auditoria
 
@@ -354,6 +397,7 @@ Toda ação sensível deixa um registro em `logs_auditoria`, que a matriz consul
 | Ação | Quando |
 |---|---|
 | `usuario.cadastrado` | cadastro de conta (guarda só o perfil) |
+| `usuario.anonimizado` | encerramento do cadastro solicitado pelo próprio cliente |
 | `auth.login`, `auth.logout` | entrada e saída |
 | `auth.login_negado` | senha errada ou e-mail desconhecido; aponta a conta alvo quando ela existe |
 | `pedido.criado` | criação do pedido, com unidade, canal e total |
@@ -367,7 +411,7 @@ Toda ação sensível deixa um registro em `logs_auditoria`, que a matriz consul
 - **Negações fora da transação.** O `403` já desfez a ação, então o registro de `acesso.negado` é gravado pelo tratador de erros, para qualquer rota. Se a gravação falhar, o erro vai para o log da aplicação e a resposta continua sendo o `403` original. O `401` por falta de token não é registrado, porque não identifica ninguém e só faria ruído; a tentativa de login com senha errada é.
 - **Rastreável até a requisição.** Cada registro guarda o `ip` e o `requestId`, o mesmo do cabeçalho `X-Request-Id` e do corpo de erro. Os dois vêm do contexto HTTP pelo `AsyncLocalStorage` do AdonisJS (`useAsyncLocalStorage: true`), sem precisar passar o contexto por cada serviço.
 - **Minimização (LGPD).** Os registros não guardam nome, e-mail, senha, token nem o payload do provedor: só identificadores, status, valores e motivos. O IP é dado pessoal e por isso a consulta é restrita ao ADMIN.
-- **Retenção.** Os registros devem ser mantidos por pelo menos 6 meses, o prazo de guarda de registros de acesso a aplicações do Marco Civil da Internet (Lei 12.965/2014, art. 15).
+- **Retenção.** A proposta de guarda e expurgo está na seção LGPD. A trilha de auditoria de negócio não substitui registros de acesso da infraestrutura.
 
 Limitações conhecidas: não há expurgo automático depois do prazo de retenção, e leituras de dados pessoais (como `GET /account/profile`) não são registradas, para não encher a trilha com consultas rotineiras.
 
@@ -408,11 +452,11 @@ O pagamento é assíncrono, então as requisições `Mock:` chamam o provedor si
 
 ### Cenários
 
-Os cenários numerados são as requisições de mesmo nome na coleção (pasta/nome). As demais (logins de outros perfis, pedidos e pagamentos de apoio, chamadas ao mock) só preparam o cenário seguinte. São 25 positivos e 17 negativos.
+Os cenários numerados são as requisições de mesmo nome na coleção (pasta/nome). As demais (logins de outros perfis, pedidos e pagamentos de apoio, chamadas ao mock) só preparam o cenário seguinte. São 26 positivos e 18 negativos.
 
 | ID | Cenário | Endpoint | Entrada | Esperado | Pasta |
 |---|---|---|---|---|---|
-| T01 | Cadastro de cliente | `POST /auth/signup` | nome, e-mail novo, senha | 201, token, sem senha na resposta | Auth |
+| T01 | Cadastro de cliente | `POST /auth/signup` | nome, e-mail novo, senha, `consentimentoDados: true` | 201, token, sem senha na resposta | Auth |
 | T02 | Login válido do cliente | `POST /auth/login` | `cliente@raizes.test` | 200 e token | Auth |
 | T03 | Perfil da conta autenticada | `GET /account/profile` | token do cliente | 200, dados da conta, sem senha | Auth |
 | T04 | Listar unidades com paginação | `GET /unidades` | `?page=1&limit=10` | 200, `data` e `metadata` | Unidades |
@@ -454,6 +498,8 @@ Os cenários numerados são as requisições de mesmo nome na coleção (pasta/n
 | T40 | Adesão sem consentimento | `POST /fidelidade/adesao` | `{ "consentimento": false }` | 422 `DADOS_INVALIDOS`, campo `consentimento` | Erros |
 | T41 | Resgate acima do saldo | `POST /pedidos` | `pontosResgatados: 99999` | 409 `SALDO_DE_PONTOS_INSUFICIENTE` | Erros |
 | T42 | Resgate sem adesão ativa | `POST /pedidos` | token de T01, depois de revogar | 409 `FIDELIDADE_INATIVA` | Erros |
+| T43 | Encerrar cadastro do cliente novo | `DELETE /clientes/conta` | token de T01, senha atual | 204, conta encerrada | LGPD |
+| T44 | Token da conta encerrada | `GET /account/profile` | token de T01 após T43 | 401 | LGPD |
 
 Além da coleção, a suíte automatizada da API (`npm test` em `api/`, com Japa) cobre as mesmas regras e as que a coleção não alcança, como pedidos e webhooks simultâneos e falhas do provedor.
 

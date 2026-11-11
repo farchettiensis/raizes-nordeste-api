@@ -22,6 +22,7 @@ export type ScannedRoutes = {
     'fidelidade.movimentos.index': { paramsTuple?: []; params?: {} }
     'fidelidade.adesao.store': { paramsTuple?: []; params?: {} }
     'fidelidade.adesao.destroy': { paramsTuple?: []; params?: {} }
+    'clientes.conta.destroy': { paramsTuple?: []; params?: {} }
     'auditoria.index': { paramsTuple?: []; params?: {} }
     'pagamentos.webhook': { paramsTuple?: []; params?: {} }
     'profile.profile.show': { paramsTuple?: []; params?: {} }
@@ -71,6 +72,7 @@ export type ScannedRoutes = {
   }
   DELETE: {
     'fidelidade.adesao.destroy': { paramsTuple?: []; params?: {} }
+    'clientes.conta.destroy': { paramsTuple?: []; params?: {} }
   }
 }
 declare module '@adonisjs/core/types/http' {

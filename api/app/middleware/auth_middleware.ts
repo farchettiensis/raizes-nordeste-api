@@ -11,6 +11,7 @@ export default class AuthMiddleware {
     } = {}
   ) {
     await ctx.auth.authenticateUsing(options.guards)
+    ctx.auth.getUserOrFail().garantirContaAtiva()
     return next()
   }
 }

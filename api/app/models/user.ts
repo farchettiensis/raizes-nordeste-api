@@ -6,6 +6,7 @@ import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 import type { BelongsTo, HasMany, HasOne } from '@adonisjs/lucid/types/relations'
 import { type AccessToken, DbAccessTokensProvider } from '@adonisjs/auth/access_tokens'
 
+import ApiException from '#exceptions/api_exception'
 import { UserSchema } from '#database/schema'
 import FidelidadeConta from '#models/fidelidade_conta'
 import Pedido from '#models/pedido'
@@ -34,11 +35,23 @@ export default class User extends compose(UserSchema, withAuthFinder(hash)) {
   @hasOne(() => FidelidadeConta, { foreignKey: 'clienteId' })
   declare fidelidade: HasOne<typeof FidelidadeConta>
 
-  static travadoParaAtualizar(id: number, trx: TransactionClientContract) {
+  static async travadoParaAtualizar(id: number, trx: TransactionClientContract) {
     const query = this.query({ client: trx }).where('id', id)
     query.knexQuery.forNoKeyUpdate()
 
-    return query.firstOrFail()
+    const usuario = await query.firstOrFail()
+    usuario.garantirContaAtiva()
+
+    return usuario
+  }
+
+  garantirContaAtiva() {
+    if (this.anonimizadoEm) {
+      throw new ApiException('Autenticacao necessaria para acessar este recurso.', {
+        code: 'NAO_AUTENTICADO',
+        status: 401,
+      })
+    }
   }
 
   get initials() {

@@ -1,3 +1,4 @@
+import { DateTime } from 'luxon'
 import db from '@adonisjs/lucid/services/db'
 
 import User from '#models/user'
@@ -12,7 +13,7 @@ export default class NewAccountController {
 
     const user = await db.transaction(async (trx) => {
       const criado = await User.create(
-        { fullName, email, password, perfil: 'CLIENTE' },
+        { fullName, email, password, perfil: 'CLIENTE', consentimentoDadosEm: DateTime.now() },
         { client: trx }
       )
 

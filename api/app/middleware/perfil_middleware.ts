@@ -8,6 +8,8 @@ export default class PerfilMiddleware {
   async handle(ctx: HttpContext, next: NextFn, options: { perfis: PerfilUsuario[] }) {
     const usuario = ctx.auth.user ?? (await ctx.auth.authenticateUsing())
 
+    usuario.garantirContaAtiva()
+
     if (!usuario.temPerfil(...options.perfis)) {
       throw new ApiException('Seu perfil nao tem permissao para esta acao.', {
         code: 'SEM_PERMISSAO',
