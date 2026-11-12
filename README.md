@@ -44,14 +44,15 @@ A API vive em `api/`, e os comandos a seguir rodam a partir dessa pasta, exceto 
 cd api
 npm install
 cp .env.example .env
+node ace generate:key
 ```
 
-Abra o `.env` e ajuste as variáveis de banco para o seu PostgreSQL. Os valores padrão assumem um servidor local em `127.0.0.1:5432` com o usuário `postgres`.
+O `generate:key` grava o `APP_KEY` no `.env`; sem ele a API não inicia. Abra o `.env` e ajuste as variáveis de banco para o seu PostgreSQL. Os valores padrão assumem um servidor local em `127.0.0.1:5432` com o usuário `postgres`.
 
 | Variável | Para que serve | Padrão |
 |---|---|---|
 | `PORT` | Porta em que a API escuta | `3333` |
-| `APP_KEY` | Chave de criptografia da aplicação | gerada na instalação |
+| `APP_KEY` | Chave de criptografia da aplicação | gerada por `node ace generate:key` |
 | `DB_HOST` | Host do PostgreSQL | `127.0.0.1` |
 | `DB_PORT` | Porta do PostgreSQL | `5432` |
 | `DB_USER` | Usuário do banco | `postgres` |
@@ -504,7 +505,7 @@ O pagamento é assíncrono, então as requisições `Mock:` chamam o provedor si
 
 ### Cenários
 
-Os cenários numerados são as requisições de mesmo nome na coleção (pasta/nome). As demais (logins de outros perfis, pedidos e pagamentos de apoio, chamadas ao mock) só preparam o cenário seguinte. São 26 positivos e 18 negativos.
+Os cenários numerados são as requisições de mesmo nome na coleção (pasta/nome). As demais (logins de outros perfis, pedidos e pagamentos de apoio, chamadas ao mock) só preparam o cenário seguinte. São 28 positivos e 20 negativos.
 
 | ID | Cenário | Endpoint | Entrada | Esperado | Pasta |
 |---|---|---|---|---|---|
