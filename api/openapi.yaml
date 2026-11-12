@@ -1,10 +1,10 @@
 openapi: 3.0.3
 
 info:
-  title: API Raizes do Nordeste
+  title: API Raízes do Nordeste
   version: 0.1.0
   description: |
-    API REST da rede de lanchonetes Raizes do Nordeste.
+    API REST da rede de lanchonetes Raízes do Nordeste.
 
     Projeto Multidisciplinar 2026, trilha Back-End (UNINTER).
 
@@ -13,7 +13,7 @@ info:
 
 servers:
   - url: /
-    description: Servidor que esta atendendo esta documentacao
+    description: Servidor que está atendendo esta documentação
 
 tags:
   - name: Autenticacao
@@ -23,18 +23,18 @@ tags:
   - name: Unidades
     description: Unidades da rede, o cardápio e o estoque de cada uma
   - name: Pedidos
-    description: Criacao de pedidos, com validacao de cardapio e estoque da unidade
+    description: Criação de pedidos, com validação de cardápio e estoque da unidade
   - name: Pagamentos
     description: |
-      Pagamento por um provedor externo (simulado pelo servico pagamento-mock).
+      Pagamento por um provedor externo (simulado pelo serviço pagamento-mock).
       A API solicita o pagamento e recebe o resultado depois, por webhook.
   - name: Fidelidade
     description: |
-      Programa de pontos do cliente, com adesao por consentimento explicito.
-      Pontos sao ganhos na entrega do pedido e resgatados como desconto na
-      criacao de um novo pedido.
+      Programa de pontos do cliente, com adesão por consentimento explícito.
+      Pontos são ganhos na entrega do pedido e resgatados como desconto na
+      criação de um novo pedido.
   - name: Auditoria
-    description: Trilha das acoes sensiveis, para a matriz
+    description: Trilha das ações sensíveis, para a matriz
 
 security:
   - bearerAuth: []
@@ -70,7 +70,7 @@ paths:
   /api/v1/auth/login:
     post:
       tags: [Autenticacao]
-      summary: Autentica o usuario e devolve um token de acesso
+      summary: Autentica o usuário e devolve um token de acesso
       security: []
       requestBody:
         required: true
@@ -96,14 +96,14 @@ paths:
   /api/v1/clientes/conta:
     delete:
       tags: [Conta]
-      summary: Encerra e anonimiza o cadastro do proprio cliente
+      summary: Encerra e anonimiza o cadastro do próprio cliente
       description: |
         Exclusivo para CLIENTE. Confirma a senha atual, remove identificadores do cadastro,
         revoga todos os tokens e consentimentos e expira o saldo de fidelidade.
-        Remove observacoes dos pedidos e IP/requestId da auditoria vinculada ao cliente.
+        Remove observações dos pedidos e IP/requestId da auditoria vinculada ao cliente.
         Pedidos, pagamentos e movimentos permanecem com os identificadores internos.
-        Essa preservacao limita a anonimizacao a remocao dos identificadores diretos.
-        A operacao e irreversivel e nao encerra contas de equipe.
+        Essa preservação limita a anonimização à remoção dos identificadores diretos.
+        A operação é irreversível e não encerra contas de equipe.
       requestBody:
         required: true
         content:
@@ -270,17 +270,16 @@ paths:
       tags: [Unidades]
       summary: Lista o saldo de estoque de uma unidade
       description: |
-        Devolve a posicao de estoque da unidade, produto a produto, com a
-        quantidade em maos e a quantidade minima definida para reposicao.
+        Devolve a posição de estoque da unidade, produto a produto, com a
+        quantidade em mãos e a quantidade mínima definida para reposição.
 
-        Endpoint restrito a equipe da operacao: ATENDENTE, COZINHA, GERENTE e
+        Endpoint restrito à equipe da operação: ATENDENTE, COZINHA, GERENTE e
         ADMIN. Um CLIENTE autenticado recebe 403, porque a disponibilidade que
-        interessa a ele ja aparece no cardapio publico da unidade.
+        interessa a ele já aparece no cardápio público da unidade.
 
-        ATENDENTE, COZINHA e GERENTE so consultam a unidade a que estao
-        vinculados (outra unidade e 403 SEM_PERMISSAO; sem unidade vinculada,
+        ATENDENTE, COZINHA e GERENTE só consultam a unidade a que estão
+        vinculados (outra unidade é 403 SEM_PERMISSAO; sem unidade vinculada,
         403 SEM_UNIDADE_VINCULADA). ADMIN consulta qualquer unidade.
-        Um id que nao seja inteiro de 1 a 2147483647 responde 422 DADOS_INVALIDOS.
       parameters:
         - $ref: '#/components/parameters/UnidadeEstoqueId'
         - $ref: '#/components/parameters/Page'
@@ -314,25 +313,20 @@ paths:
       tags: [Unidades]
       summary: Registra uma entrada ou um ajuste de estoque
       description: |
-        GERENTE opera somente a propria unidade; ADMIN opera qualquer unidade.
-        Um gerente sem vinculo recebe 403 SEM_UNIDADE_VINCULADA.
-        Um id que nao seja inteiro de 1 a 2147483647 responde 422 DADOS_INVALIDOS.
-        Exige um estoque ja cadastrado para o produto naquela unidade (404
-        se a unidade ou o registro de estoque nao existir).
+        GERENTE opera somente a própria unidade (sem vínculo, 403
+        SEM_UNIDADE_VINCULADA); ADMIN opera qualquer unidade. Exige um estoque
+        já cadastrado para o produto naquela unidade (404 se a unidade ou o
+        registro de estoque não existir).
 
-        ENTRADA soma uma quantidade positiva. AJUSTE soma uma diferenca
-        positiva ou negativa, nunca zero. Exemplo: saldo 10 e ajuste -3
-        resultam em saldo 7. SAIDA e reservada aos pedidos.
-        O motivo e obrigatorio. Saldo negativo responde 409
-        ESTOQUE_INSUFICIENTE. O saldo resultante somado as unidades reservadas
-        em pedidos AGUARDANDO_PAGAMENTO ou PAGO nao pode superar 2147483647;
-        acima disso responde 409 SALDO_ESTOQUE_ACIMA_DO_LIMITE, preservando
-        espaco para devolucoes por cancelamento ou recusa de pagamento.
-        As reservas sao somadas apos obter a trava do estoque.
-        Saldo, movimentacao e auditoria
-        estoque.movimentado sao gravados na mesma transacao, com trava
-        do registro de estoque para serializar pedidos e lancamentos.
-        Cada chamada valida gera um novo movimento; nao ha idempotencia.
+        ENTRADA soma uma quantidade positiva. AJUSTE soma uma diferença
+        positiva ou negativa, nunca zero: saldo 10 e ajuste -3 resultam em
+        saldo 7. SAIDA é reservada aos pedidos. O motivo é obrigatório.
+
+        Saldo negativo responde 409 ESTOQUE_INSUFICIENTE. Saldo resultante
+        somado às unidades reservadas em pedidos AGUARDANDO_PAGAMENTO ou PAGO
+        acima de 2147483647 responde 409 SALDO_ESTOQUE_ACIMA_DO_LIMITE. Saldo,
+        movimentação e auditoria são gravados na mesma transação. Cada chamada
+        válida gera um novo movimento; não há idempotência.
       parameters:
         - $ref: '#/components/parameters/UnidadeEstoqueId'
       requestBody:
@@ -349,7 +343,7 @@ paths:
                   { produtoId: 1, tipo: AJUSTE, quantidade: -2, motivo: Perda no armazenamento }
       responses:
         '201':
-          description: Movimentacao registrada com o saldo resultante
+          description: Movimentação registrada com o saldo resultante
           content:
             application/json:
               schema:
@@ -374,15 +368,15 @@ paths:
       tags: [Pedidos]
       summary: Lista pedidos, com filtros por canal, status e unidade
       description: |
-        Lista paginada dos pedidos dentro do escopo do usuario: o CLIENTE ve
-        os proprios pedidos; ATENDENTE, COZINHA e GERENTE, os da unidade a que
-        estao vinculados; ADMIN, todos. Um perfil de unidade sem unidade
+        Lista paginada dos pedidos dentro do escopo do usuário: o CLIENTE vê
+        os próprios pedidos; ATENDENTE, COZINHA e GERENTE, os da unidade a que
+        estão vinculados; ADMIN, todos. Um perfil de unidade sem unidade
         vinculada recebe 403 SEM_UNIDADE_VINCULADA.
 
         Os filtros se combinam, por exemplo
         `?canalPedido=APP&status=AGUARDANDO_PAGAMENTO`. O filtro `unidadeId`
-        vale para ADMIN e CLIENTE; para um perfil de unidade, so a propria
-        unidade e aceita, e outra responde 403.
+        vale para ADMIN e CLIENTE; para um perfil de unidade, só a própria
+        unidade é aceita, e outra responde 403.
 
         Ordem: mais recentes primeiro, com desempate pelo id.
       parameters:
@@ -426,31 +420,26 @@ paths:
           $ref: '#/components/responses/DadosInvalidos'
     post:
       tags: [Pedidos]
-      summary: Cria um pedido validando o cardapio e o estoque da unidade
+      summary: Cria um pedido validando o cardápio e o estoque da unidade
       description: |
         Cria o pedido em AGUARDANDO_PAGAMENTO para o CLIENTE autenticado. O
-        cliente vem do token, nunca do corpo da requisicao.
+        cliente vem do token, nunca do corpo da requisição.
 
-        Cada item guarda o nome e o preco praticado na unidade no momento do
-        pedido, e o total e calculado no servidor. O estoque e baixado na
-        criacao, com uma movimentacao de SAIDA por item vinculada ao pedido.
+        Cada item guarda o nome e o preço praticado na unidade no momento do
+        pedido, e o total é calculado no servidor. O estoque é baixado na
+        criação, com uma movimentação de SAIDA por item vinculada ao pedido.
 
-        Os saldos dos produtos do pedido ficam bloqueados (SELECT ... FOR
-        UPDATE) durante a transacao, entao dois pedidos simultaneos pela ultima
-        unidade de um produto nunca sao aceitos ao mesmo tempo: um e criado e
-        o outro recebe 409.
-
-        As verificacoes seguem esta ordem e cada uma aponta todos os itens com
+        As verificações seguem esta ordem e cada uma aponta todos os itens com
         problema: unidade inexistente (404) ou inativa (409), produto fora do
-        cardapio da unidade (404), produto indisponivel (409) e estoque
+        cardápio da unidade (404), produto indisponível (409) e estoque
         insuficiente (409).
 
         Com `pontosResgatados`, o cliente troca pontos de fidelidade por
-        desconto (R$ 0,05 por ponto, ate 50% do subtotal). Depois do estoque,
-        a API confere a adesao ao programa (409 FIDELIDADE_INATIVA), o saldo
+        desconto (R$ 0,05 por ponto, até 50% do subtotal). Depois do estoque,
+        a API confere a adesão ao programa (409 FIDELIDADE_INATIVA), o saldo
         (409 SALDO_DE_PONTOS_INSUFICIENTE) e o limite (409
-        DESCONTO_ACIMA_DO_LIMITE). Os pontos saem do saldo na criacao, com a
-        conta bloqueada, e voltam se o pedido for cancelado.
+        DESCONTO_ACIMA_DO_LIMITE). Os pontos saem do saldo na criação e voltam
+        se o pedido for cancelado.
       requestBody:
         required: true
         content:
@@ -492,16 +481,16 @@ paths:
       tags: [Pedidos]
       summary: Consulta um pedido, com os itens e o pagamento
       description: |
-        Devolve o pedido com os itens e o pagamento, se houver. E por aqui que o
+        Devolve o pedido com os itens e o pagamento, se houver. É por aqui que o
         cliente acompanha o resultado do pagamento, que chega de forma
-        assincrona: o pedido sai de AGUARDANDO_PAGAMENTO para PAGO ou
+        assíncrona: o pedido sai de AGUARDANDO_PAGAMENTO para PAGO ou
         CANCELADO quando o provedor responde.
 
-        Qualquer perfil autenticado, dentro do seu escopo: o CLIENTE ve os
-        proprios pedidos; ATENDENTE, COZINHA e GERENTE, os da unidade a que
-        estao vinculados; ADMIN, todos. Fora do escopo a resposta e 403, e um
+        Qualquer perfil autenticado, dentro do seu escopo: o CLIENTE vê os
+        próprios pedidos; ATENDENTE, COZINHA e GERENTE, os da unidade a que
+        estão vinculados; ADMIN, todos. Fora do escopo a resposta é 403, e um
         perfil de unidade sem unidade vinculada recebe 403
-        SEM_UNIDADE_VINCULADA. A existencia e conferida antes (404).
+        SEM_UNIDADE_VINCULADA. A existência é conferida antes (404).
       parameters:
         - $ref: '#/components/parameters/PedidoId'
       responses:
@@ -525,12 +514,12 @@ paths:
   /api/v1/pedidos/{id}/status:
     patch:
       tags: [Pedidos]
-      summary: Avanca o pedido no ciclo de vida ou cancela o pedido
+      summary: Avança o pedido no ciclo de vida ou cancela o pedido
       description: |
-        Leva o pedido ao proximo status ou o cancela. Cada transicao tem os
-        perfis que podem faze-la:
+        Leva o pedido ao próximo status ou o cancela. Cada transição tem os
+        perfis que podem fazê-la:
 
-        | Transicao | Perfis |
+        | Transição | Perfis |
         |---|---|
         | PAGO para EM_PREPARO | COZINHA, GERENTE |
         | EM_PREPARO para PRONTO | COZINHA, GERENTE |
@@ -538,29 +527,27 @@ paths:
         | AGUARDANDO_PAGAMENTO para CANCELADO | CLIENTE dono, ATENDENTE, GERENTE, ADMIN |
         | PAGO, EM_PREPARO ou PRONTO para CANCELADO | GERENTE, ADMIN |
 
-        ATENDENTE, COZINHA e GERENTE so agem sobre pedidos da propria
-        unidade, e o CLIENTE so sobre os proprios. ADMIN cancela, mas nao faz
-        transicoes de avanco, porque a matriz nao opera a cozinha nem o
-        balcao. PAGO nao e aceito: so o webhook do provedor marca o pedido
+        ATENDENTE, COZINHA e GERENTE só agem sobre pedidos da própria
+        unidade, e o CLIENTE só sobre os próprios. ADMIN cancela, mas não faz
+        transições de avanço, porque a matriz não opera a cozinha nem o
+        balcão. PAGO não é aceito: só o webhook do provedor marca o pedido
         como pago.
 
-        As checagens rodam com o pedido travado, nesta ordem: existencia
-        (404), escopo (403), transicao prevista no ciclo de vida (409, com os
-        destinos possiveis a partir do status atual) e perfil (403). Duas
-        transicoes simultaneas do mesmo pedido nunca sao aplicadas juntas: a
-        segunda espera a primeira e recebe 409. Nao ha volta de status.
+        Ordem das checagens: existência (404), escopo (403), transição
+        prevista no ciclo de vida (409, com os destinos possíveis a partir do
+        status atual) e perfil (403). Não há volta de status.
 
         Cancelar exige `motivo` e segue estas regras:
 
-        - Pagamento PENDENTE: 409 `PAGAMENTO_EM_ANDAMENTO`. Uma aprovacao que
-          chegasse depois do cancelamento deixaria uma cobranca sem estorno.
+        - Pagamento PENDENTE: 409 `PAGAMENTO_EM_ANDAMENTO`. Uma aprovação que
+          chegasse depois do cancelamento deixaria uma cobrança sem estorno.
         - Pagamento APROVADO: a API pede o estorno ao provedor antes de
-          cancelar. Se o provedor falhar (502 ou 503), o pedido nao muda, e
+          cancelar. Se o provedor falhar (502 ou 503), o pedido não muda, e
           repetir a chamada reenvia o estorno com a mesma chave de
-          idempotencia, sem estornar duas vezes.
-        - O estoque volta (uma ENTRADA por item) so quando o pedido e
+          idempotência, sem estornar duas vezes.
+        - O estoque volta (uma ENTRADA por item) só quando o pedido é
           cancelado de AGUARDANDO_PAGAMENTO ou PAGO. De EM_PREPARO ou PRONTO
-          os insumos ja foram usados: ha estorno, mas o estoque nao volta.
+          os insumos já foram usados: há estorno, mas o estoque não volta.
       parameters:
         - $ref: '#/components/parameters/PedidoId'
       requestBody:
@@ -610,18 +597,18 @@ paths:
       description: |
         Envia o pedido ao provedor de pagamento e devolve o pagamento como
         PENDENTE, com 202: o resultado chega depois, pelo webhook do provedor,
-        e e entao que o pedido vai para PAGO ou CANCELADO. Para PIX, a resposta
-        traz o codigo copia e cola que o cliente usa no app do banco.
+        e é então que o pedido vai para PAGO ou CANCELADO. Para PIX, a resposta
+        traz o código copia e cola que o cliente usa no app do banco.
 
-        So o CLIENTE dono do pedido pode paga-lo, e so enquanto o pedido esta
+        Só o CLIENTE dono do pedido pode pagá-lo, e só enquanto o pedido está
         AGUARDANDO_PAGAMENTO. O valor vem do total do pedido, nunca do corpo.
-        A API nao recebe dados de cartao: a captura e feita pelo app cliente
+        A API não recebe dados de cartão: a captura é feita pelo app cliente
         direto no provedor.
 
-        Idempotente por pedido: repetir a chamada com o mesmo metodo devolve o
-        mesmo pagamento, sem cobrar de novo. Se o provedor nao respondeu (503),
-        repetir a chamada reenvia a mesma solicitacao com a mesma chave de
-        idempotencia. Trocar o metodo com um pagamento em andamento e 409.
+        Idempotente por pedido: repetir a chamada com o mesmo método devolve o
+        mesmo pagamento, sem cobrar de novo. Se o provedor não respondeu (503),
+        repetir a chamada reenvia a mesma solicitação com a mesma chave de
+        idempotência. Trocar o método com um pagamento em andamento é 409.
       parameters:
         - $ref: '#/components/parameters/PedidoId'
       requestBody:
@@ -661,14 +648,14 @@ paths:
   /api/v1/fidelidade:
     get:
       tags: [Fidelidade]
-      summary: Situacao do cliente no programa de fidelidade
+      summary: Situação do cliente no programa de fidelidade
       description: |
-        Exclusivo do CLIENTE. Responde 200 mesmo sem adesao, com `ativa:
+        Exclusivo do CLIENTE. Responde 200 mesmo sem adesão, com `ativa:
         false`, para o app mostrar o convite. Traz as regras vigentes: pontos
         por real, valor do ponto e limite de desconto.
       responses:
         '200':
-          description: Situacao no programa
+          description: Situação no programa
           content:
             application/json:
               schema:
@@ -687,10 +674,10 @@ paths:
       tags: [Fidelidade]
       summary: Extrato de pontos do cliente
       description: |
-        Exclusivo do CLIENTE. Movimentos paginados da propria conta, mais
-        recentes primeiro: ACUMULO na entrega, RESGATE na criacao do pedido,
-        ESTORNO quando um pedido com resgate e cancelado e EXPIRACAO quando o
-        consentimento e revogado.
+        Exclusivo do CLIENTE. Movimentos paginados da própria conta, mais
+        recentes primeiro: ACUMULO na entrega, RESGATE na criação do pedido,
+        ESTORNO quando um pedido com resgate é cancelado e EXPIRACAO quando o
+        consentimento é revogado.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
@@ -719,12 +706,12 @@ paths:
   /api/v1/fidelidade/adesao:
     post:
       tags: [Fidelidade]
-      summary: Adere ao programa com consentimento explicito
+      summary: Adere ao programa com consentimento explícito
       description: |
         Exclusivo do CLIENTE. O corpo precisa trazer `consentimento: true`:
-        a adesao e o consentimento para o tratamento dos dados de consumo
-        com a finalidade de fidelizacao (LGPD, art. 7, I). Grava a data do
-        consentimento no usuario, abre a conta (ou reabre, com saldo zero) e
+        a adesão é o consentimento para o tratamento dos dados de consumo
+        com a finalidade de fidelização (LGPD, art. 7, I). Grava a data do
+        consentimento no usuário, abre a conta (ou reabre, com saldo zero) e
         registra `fidelidade.aderida` na auditoria.
       requestBody:
         required: true
@@ -741,7 +728,7 @@ paths:
               consentimento: true
       responses:
         '201':
-          description: Adesao registrada
+          description: Adesão registrada
           content:
             application/json:
               schema:
@@ -762,11 +749,11 @@ paths:
       tags: [Fidelidade]
       summary: Revoga o consentimento e sai do programa
       description: |
-        Exclusivo do CLIENTE. A revogacao vale a qualquer momento (LGPD, art.
-        8, paragrafo 5). Limpa a data do consentimento, zera o saldo com um
+        Exclusivo do CLIENTE. A revogação vale a qualquer momento (LGPD, art.
+        8, parágrafo 5). Limpa a data do consentimento, zera o saldo com um
         movimento de EXPIRACAO e registra `fidelidade.revogada` na auditoria.
-        A conta e o extrato ficam, porque sustentam os descontos ja
-        concedidos; a partir daqui nada mais e acumulado nem resgatado.
+        A conta e o extrato ficam, porque sustentam os descontos já
+        concedidos; a partir daqui nada mais é acumulado nem resgatado.
       responses:
         '204':
           description: Consentimento revogado
@@ -780,21 +767,21 @@ paths:
   /api/v1/auditoria:
     get:
       tags: [Auditoria]
-      summary: Consulta a trilha de auditoria das acoes sensiveis
+      summary: Consulta a trilha de auditoria das ações sensíveis
       description: |
         Exclusivo do ADMIN. Lista paginada dos registros de auditoria, mais
-        recentes primeiro. Cada acao sensivel grava um registro na mesma
-        transacao da acao: criacao, mudanca de status e cancelamento de
-        pedido; solicitacao, resultado e estorno de pagamento; cadastro,
-        login, tentativa de login negada e logout; adesao e revogacao do
-        consentimento de fidelidade; movimentacao manual de estoque. Todo 403 da API tambem
+        recentes primeiro. Cada ação sensível grava um registro na mesma
+        transação da ação: criação, mudança de status e cancelamento de
+        pedido; solicitação, resultado e estorno de pagamento; cadastro,
+        login, tentativa de login negada e logout; adesão e revogação do
+        consentimento de fidelidade; movimentação manual de estoque. Todo 403 da API também
         grava um registro `acesso.negado`, inclusive a tentativa de abrir
         esta rota sem ser ADMIN.
 
-        Os registros nao guardam nome, e-mail, senha nem token: so
+        Os registros não guardam nome, e-mail, senha nem token: só
         identificadores, status, valores e motivos.
 
-        Para ver o historico de um pedido: `?entidade=pedido&entidadeId=9001`.
+        Para ver o histórico de um pedido: `?entidade=pedido&entidadeId=9001`.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
@@ -833,7 +820,7 @@ paths:
             maxLength: 40
         - name: usuarioId
           in: query
-          description: Quem fez a acao
+          description: Quem fez a ação
           schema:
             type: integer
             minimum: 1
@@ -864,19 +851,19 @@ paths:
       tags: [Pagamentos]
       summary: Recebe do provedor o resultado de um pagamento
       description: |
-        Chamado pelo provedor de pagamento, nao pelo cliente. Nao usa token: a
-        autenticidade vem do cabecalho X-Assinatura, um HMAC-SHA256 de
+        Chamado pelo provedor de pagamento, não pelo cliente. Não usa token: a
+        autenticidade vem do cabeçalho X-Assinatura, um HMAC-SHA256 de
         `<t>.<corpo bruto>` com o segredo compartilhado
-        (PAGAMENTO_WEBHOOK_SECRET). Assinaturas com mais de 5 minutos sao
+        (PAGAMENTO_WEBHOOK_SECRET). Assinaturas com mais de 5 minutos são
         recusadas, o que impede reaproveitar uma entrega capturada.
 
         APROVADO leva o pedido a PAGO. RECUSADO leva o pedido a CANCELADO,
-        guarda o motivo no pagamento e devolve o estoque, com uma movimentacao
-        de ENTRADA por item vinculada ao pedido, tudo na mesma transacao.
+        guarda o motivo no pagamento e devolve o estoque, com uma movimentação
+        de ENTRADA por item vinculada ao pedido, tudo na mesma transação.
 
-        O provedor entrega cada evento ao menos uma vez, entao o processamento
-        e idempotente: o pedido e o pagamento ficam bloqueados durante a
-        transacao e um resultado para pagamento que ja nao esta PENDENTE e
+        O provedor entrega cada evento ao menos uma vez, então o processamento
+        é idempotente: o pedido e o pagamento ficam bloqueados durante a
+        transação e um resultado para pagamento que já não está PENDENTE é
         ignorado com 204, sem devolver o estoque de novo.
       security: []
       parameters:
@@ -942,7 +929,7 @@ components:
       name: id
       in: path
       required: true
-      description: Identificador da unidade; formato ou faixa invalida responde 422
+      description: Identificador da unidade; formato ou faixa inválida responde 422
       schema:
         type: integer
         minimum: 1
@@ -1004,12 +991,12 @@ components:
         usuarioId:
           type: integer
           nullable: true
-          description: Quem fez a acao; nulo quando foi o provedor de pagamento ou um login sem conta
+          description: Quem fez a ação; nulo quando foi o provedor de pagamento ou um login sem conta
           example: 7
         dados:
           type: object
           nullable: true
-          description: Detalhes da acao, sem dados pessoais
+          description: Detalhes da ação, sem dados pessoais
           example:
             de: PAGO
             motivo: Cliente desistiu no balcao
@@ -1022,7 +1009,7 @@ components:
         requestId:
           type: string
           nullable: true
-          description: Mesmo valor do cabecalho X-Request-Id e do requestId nos erros
+          description: Mesmo valor do cabeçalho X-Request-Id e do requestId nos erros
           example: 4d5e6f7a-8b9c-4d0e-9f2a-3b4c5d6e7f8a
         createdAt:
           type: string
@@ -1045,12 +1032,12 @@ components:
           minimum: -2147483647
           maximum: 2147483647
           not: { enum: [0] }
-          description: Positiva para ENTRADA; diferenca com sinal para AJUSTE
+          description: Positiva para ENTRADA; diferença com sinal para AJUSTE
         motivo:
           type: string
           minLength: 3
           maxLength: 255
-          description: Justificativa apos remover espacos nas extremidades
+          description: Justificativa após remover espaços nas extremidades
       oneOf:
         - properties:
             tipo: { enum: [ENTRADA] }
@@ -1074,7 +1061,7 @@ components:
           enum: [ENTRADA, AJUSTE]
         quantidade:
           type: integer
-          description: Diferenca aplicada ao saldo anterior
+          description: Diferença aplicada ao saldo anterior
         saldoResultante:
           type: integer
           minimum: 0
@@ -1209,7 +1196,7 @@ components:
           example: 2
         abaixoDoMinimo:
           type: boolean
-          description: Verdadeiro quando o saldo atingiu ou passou do minimo
+          description: Verdadeiro quando o saldo atingiu ou passou do mínimo
           example: false
 
     NovoPedido:
@@ -1227,7 +1214,7 @@ components:
         itens:
           type: array
           minItems: 1
-          description: Cada produto aparece uma unica vez
+          description: Cada produto aparece uma única vez
           items:
             type: object
             required: [produtoId, quantidade]
@@ -1266,7 +1253,7 @@ components:
           example: 2
         precoUnitario:
           type: string
-          description: Preco praticado na unidade no momento do pedido
+          description: Preço praticado na unidade no momento do pedido
           example: '18.90'
         subtotal:
           type: string
@@ -1319,14 +1306,14 @@ components:
           example: '60.15'
         pontosGerados:
           type: integer
-          description: Pontos de fidelidade creditados na entrega; zero ate la ou sem adesao
+          description: Pontos de fidelidade creditados na entrega; zero até lá ou sem adesão
           example: 0
         itens:
           type: array
           items:
             $ref: '#/components/schemas/ItemDoPedido'
         pagamento:
-          description: Presente na consulta do pedido; nulo enquanto nao houver pagamento
+          description: Presente na consulta do pedido; nulo enquanto não houver pagamento
           nullable: true
           allOf:
             - $ref: '#/components/schemas/Pagamento'
@@ -1334,12 +1321,12 @@ components:
           type: string
           format: date-time
           nullable: true
-          description: Quando o pedido foi cancelado; nulo enquanto nao for
+          description: Quando o pedido foi cancelado; nulo enquanto não for
           example: null
         motivoCancelamento:
           type: string
           nullable: true
-          description: Informado por quem cancelou; nulo na recusa do pagamento, cujo motivo esta em pagamento.motivoRecusa
+          description: Informado por quem cancelou; nulo na recusa do pagamento, cujo motivo está em pagamento.motivoRecusa
           example: null
         createdAt:
           type: string
@@ -1358,7 +1345,7 @@ components:
           type: string
           minLength: 3
           maxLength: 255
-          description: Obrigatorio ao cancelar; ignorado nas demais transicoes
+          description: Obrigatório ao cancelar; ignorado nas demais transições
 
     NovoPagamento:
       type: object
@@ -1366,7 +1353,7 @@ components:
       properties:
         metodo:
           type: string
-          description: DINHEIRO nao passa pelo provedor externo e fica fora desta rota
+          description: DINHEIRO não passa pelo provedor externo e fica fora desta rota
           enum: [PIX, CARTAO_CREDITO, CARTAO_DEBITO]
 
     Pagamento:
@@ -1456,7 +1443,7 @@ components:
               example: pag_0d4f8a8e-3b9e-4b8a-9f57-2f5d1f1f8b10
             referencia:
               type: string
-              description: pagamentoId nesta API, enviado na solicitacao
+              description: pagamentoId nesta API, enviado na solicitação
               example: '17'
             valor:
               type: integer
@@ -1550,7 +1537,7 @@ components:
       properties:
         error:
           type: string
-          description: Identificador estavel do erro
+          description: Identificador estável do erro
           example: DADOS_INVALIDOS
         message:
           type: string
@@ -1599,14 +1586,14 @@ components:
           example: DF
 
     NovaConta:
-      description: Consentimento especifico para manter o cadastro; nao inclui fidelidade nem marketing.
+      description: Consentimento específico para manter o cadastro; não inclui fidelidade nem marketing.
       type: object
       required: [fullName, email, password, passwordConfirmation, consentimentoDados]
       properties:
         consentimentoDados:
           type: boolean
           enum: [true]
-          description: Autoriza o tratamento do cadastro conforme a secao LGPD do README.
+          description: Autoriza o tratamento do cadastro conforme a seção LGPD do README.
         fullName:
           type: string
           nullable: true
@@ -1654,7 +1641,7 @@ components:
 
   responses:
     DadosInvalidos:
-      description: Corpo da requisicao reprovado na validacao
+      description: Corpo da requisição reprovado na validação
       content:
         application/json:
           schema:
@@ -1670,14 +1657,14 @@ components:
             requestId: 33be9a44-6849-439c-960c-cb2d995aa732
 
     ConfirmacaoDeContaInvalida:
-      description: Token ausente ou invalido, ou senha incorreta
+      description: Token ausente ou inválido, ou senha incorreta
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Erro'
 
     CredenciaisInvalidas:
-      description: E-mail ou senha invalidos
+      description: E-mail ou senha inválidos
       content:
         application/json:
           schema:
@@ -1705,7 +1692,7 @@ components:
             requestId: 3e01d106-5f6e-4888-a9a5-0ab2e4e21f27
 
     SemPermissao:
-      description: O perfil autenticado nao tem permissao para a acao
+      description: O perfil autenticado não tem permissão para a ação
       content:
         application/json:
           schema:
@@ -1719,7 +1706,7 @@ components:
             requestId: 6f1a0e8c-2c2f-4a8a-9f32-9f0e1d4b7a55
 
     NaoAutenticado:
-      description: Token ausente ou invalido
+      description: Token ausente ou inválido
       content:
         application/json:
           schema:
@@ -1733,7 +1720,7 @@ components:
             requestId: 33be9a44-6849-439c-960c-cb2d995aa732
 
     PedidoComRecursoInexistente:
-      description: Unidade inexistente ou produto fora do cardapio da unidade
+      description: Unidade inexistente ou produto fora do cardápio da unidade
       content:
         application/json:
           schema:
@@ -1760,14 +1747,14 @@ components:
                 path: /api/v1/pedidos
                 requestId: 2c8d3e4f-5061-4b72-9c83-ad94e5f60718
     EstoqueEmConflito:
-      description: Saldo insuficiente para o ajuste ou saldo resultante somado as reservas acima de 2147483647
+      description: Saldo insuficiente para o ajuste ou saldo resultante somado às reservas acima de 2147483647
       content:
         application/json:
           schema:
             $ref: '#/components/schemas/Erro'
 
     PedidoEmConflito:
-      description: Unidade inativa, produto indisponivel, estoque insuficiente ou resgate de pontos recusado
+      description: Unidade inativa, produto indisponível, estoque insuficiente ou resgate de pontos recusado
       content:
         application/json:
           schema:
@@ -1833,7 +1820,7 @@ components:
                 requestId: 82e494a5-b6c7-4d18-8249-035a4b526d7e
 
     SemPermissaoNoPedido:
-      description: Perfil sem permissao ou pedido de outro cliente
+      description: Perfil sem permissão ou pedido de outro cliente
       content:
         application/json:
           schema:
@@ -1881,7 +1868,7 @@ components:
                 requestId: 1f5a6b7c-8d9e-4f0a-9b2c-3d4e5f6a7b8c
 
     ForaDoEscopoDoPedido:
-      description: Pedido fora do escopo do usuario ou perfil de unidade sem unidade vinculada
+      description: Pedido fora do escopo do usuário ou perfil de unidade sem unidade vinculada
       content:
         application/json:
           schema:
@@ -1905,7 +1892,7 @@ components:
                 requestId: 9d3e4f5a-6b7c-4d8e-9f0a-1b2c3d4e5f6a
 
     SemPermissaoNaTransicao:
-      description: Perfil que nao faz a transicao, pedido fora do escopo ou perfil de unidade sem unidade vinculada
+      description: Perfil que não faz a transição, pedido fora do escopo ou perfil de unidade sem unidade vinculada
       content:
         application/json:
           schema:
@@ -1940,7 +1927,7 @@ components:
 
     TransicaoDeStatusInvalida:
       description: |
-        Transicao fora do ciclo de vida do pedido, com os destinos possiveis,
+        Transição fora do ciclo de vida do pedido, com os destinos possíveis,
         ou cancelamento com o pagamento ainda em andamento
       content:
         application/json:
@@ -1977,7 +1964,7 @@ components:
                 requestId: 6f7a8b9c-0d1e-4f2a-9b3c-5d6e7f8a9b0c
 
     PedidoNaoEncontrado:
-      description: O pedido informado nao existe
+      description: O pedido informado não existe
       content:
         application/json:
           schema:
@@ -1993,7 +1980,7 @@ components:
             requestId: 8c2d3e4f-5a6b-4c7d-8e9f-a0b1c2d3e4f5
 
     PagamentoEmConflito:
-      description: Pedido fora de AGUARDANDO_PAGAMENTO ou pagamento em andamento com outro metodo
+      description: Pedido fora de AGUARDANDO_PAGAMENTO ou pagamento em andamento com outro método
       content:
         application/json:
           schema:
@@ -2036,8 +2023,8 @@ components:
 
     GatewayPagamentoIndisponivel:
       description: |
-        O provedor nao respondeu depois das retentativas. O pagamento fica
-        PENDENTE e repetir a chamada reenvia a mesma solicitacao.
+        O provedor não respondeu depois das retentativas. O pagamento fica
+        PENDENTE e repetir a chamada reenvia a mesma solicitação.
       content:
         application/json:
           schema:
@@ -2052,9 +2039,9 @@ components:
 
     EstornoIndisponivel:
       description: |
-        O provedor nao respondeu ao pedido de estorno depois das retentativas.
+        O provedor não respondeu ao pedido de estorno depois das retentativas.
         O pedido continua no status anterior e repetir a chamada reenvia o
-        estorno com a mesma chave de idempotencia.
+        estorno com a mesma chave de idempotência.
       content:
         application/json:
           schema:
@@ -2068,7 +2055,7 @@ components:
             requestId: d17c8d9e-afb0-4c12-93d4-f5a6b7c8d9ea
 
     FidelidadeEmConflito:
-      description: Adesao ja ativa, ou revogacao sem adesao ativa
+      description: Adesão já ativa, ou revogação sem adesão ativa
       content:
         application/json:
           schema:
@@ -2092,7 +2079,7 @@ components:
                 requestId: a406b6c7-d8e9-4f3a-a46b-257c6d748f90
 
     AssinaturaInvalida:
-      description: Cabecalho X-Assinatura ausente, invalido ou expirado
+      description: Cabeçalho X-Assinatura ausente, inválido ou expirado
       content:
         application/json:
           schema:
@@ -2106,7 +2093,7 @@ components:
             requestId: d17c8d9e-af0b-4c12-93d4-f5a6b7c8d9e0
 
     PagamentoNaoEncontrado:
-      description: A referencia enviada pelo provedor nao corresponde a nenhum pagamento
+      description: A referência enviada pelo provedor não corresponde a nenhum pagamento
       content:
         application/json:
           schema:
@@ -2122,7 +2109,7 @@ components:
             requestId: e28d9eaf-b01c-4d23-a4e5-a6b7c8d9e0f1
 
     ResultadoDePagamentoEmConflito:
-      description: Resultado divergente do pagamento registrado, ou pedido que nao aceita a transicao
+      description: Resultado divergente do pagamento registrado, ou pedido que não aceita a transição
       content:
         application/json:
           schema:
