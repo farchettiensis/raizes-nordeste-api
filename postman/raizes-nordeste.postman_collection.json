@@ -3271,6 +3271,62 @@
       "description": "Encerra somente o cliente aleatório criado em T01, sem alterar as contas do seed.",
       "item": [
         {
+          "name": "Novo login do cliente cadastrado apos logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const corpo = pm.response.json().data;",
+                  "pm.test('Devolve token', () => pm.expect(corpo.token).to.match(/^oat_/));",
+                  "pm.test('Não expõe a senha', () => pm.expect(corpo.user).to.not.have.property('password'));",
+                  "pm.collectionVariables.set('novoClienteToken', corpo.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            },
+            "description": "Autentica novamente a conta de T01 depois do logout testado em T32. Guarda um token ativo para encerrar a conta em T43.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{emailNovoCliente}}\",\n  \"password\": \"Senha@123\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
           "name": "T43 Encerrar cadastro do cliente novo",
           "request": {
             "method": "DELETE",
@@ -3314,7 +3370,8 @@
                   "language": "json"
                 }
               }
-            }
+            },
+            "description": "Encerra a conta de T01 usando o token ativo do novo login, posterior ao teste de logout. Esperado: 204."
           },
           "event": [
             {
@@ -3367,7 +3424,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('error NAO_AUTENTICADO', () => pm.expect(pm.response.json().error).to.eql('NAO_AUTENTICADO'));"
                 ]
               }
             }

@@ -519,7 +519,7 @@ Os cenários numerados são as requisições de mesmo nome na coleção (pasta/n
 | T40 | Adesão sem consentimento | `POST /fidelidade/adesao` | `{ "consentimento": false }` | 422 `DADOS_INVALIDOS`, campo `consentimento` | Erros |
 | T41 | Resgate acima do saldo | `POST /pedidos` | `pontosResgatados: 99999` | 409 `SALDO_DE_PONTOS_INSUFICIENTE` | Erros |
 | T42 | Resgate sem adesão ativa | `POST /pedidos` | token de T01, depois de revogar | 409 `FIDELIDADE_INATIVA` | Erros |
-| T43 | Encerrar cadastro do cliente novo | `DELETE /clientes/conta` | token de T01, senha atual | 204, conta encerrada | LGPD |
+| T43 | Encerrar cadastro do cliente novo | `DELETE /clientes/conta` | novo login da conta de T01 após T32, senha atual | 204, conta encerrada | LGPD |
 | T44 | Token da conta encerrada | `GET /account/profile` | token de T01 após T43 | 401 | LGPD |
 | T45 | Entrada de estoque | `POST /unidades/:id/estoque/movimentacoes` | gerente, ENTRADA de 5 | 201, saldo acrescido em 5 | Estoque |
 | T46 | Ajuste de estoque | `POST /unidades/:id/estoque/movimentacoes` | gerente, AJUSTE de -5 após T45 | 201, saldo anterior restaurado | Estoque |
