@@ -280,8 +280,9 @@ paths:
         ATENDENTE, COZINHA e GERENTE so consultam a unidade a que estao
         vinculados (outra unidade e 403 SEM_PERMISSAO; sem unidade vinculada,
         403 SEM_UNIDADE_VINCULADA). ADMIN consulta qualquer unidade.
+        Um id que nao seja inteiro de 1 a 2147483647 responde 422 DADOS_INVALIDOS.
       parameters:
-        - $ref: '#/components/parameters/UnidadeId'
+        - $ref: '#/components/parameters/UnidadeEstoqueId'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Limit'
       responses:
@@ -305,6 +306,66 @@ paths:
           $ref: '#/components/responses/SemPermissao'
         '404':
           $ref: '#/components/responses/RecursoNaoEncontrado'
+        '422':
+          $ref: '#/components/responses/DadosInvalidos'
+
+  /api/v1/unidades/{id}/estoque/movimentacoes:
+    post:
+      tags: [Unidades]
+      summary: Registra uma entrada ou um ajuste de estoque
+      description: |
+        GERENTE opera somente a propria unidade; ADMIN opera qualquer unidade.
+        Um gerente sem vinculo recebe 403 SEM_UNIDADE_VINCULADA.
+        Um id que nao seja inteiro de 1 a 2147483647 responde 422 DADOS_INVALIDOS.
+        Exige um estoque ja cadastrado para o produto naquela unidade (404
+        se a unidade ou o registro de estoque nao existir).
+
+        ENTRADA soma uma quantidade positiva. AJUSTE soma uma diferenca
+        positiva ou negativa, nunca zero. Exemplo: saldo 10 e ajuste -3
+        resultam em saldo 7. SAIDA e reservada aos pedidos.
+        O motivo e obrigatorio. Saldo negativo responde 409
+        ESTOQUE_INSUFICIENTE. O saldo resultante somado as unidades reservadas
+        em pedidos AGUARDANDO_PAGAMENTO ou PAGO nao pode superar 2147483647;
+        acima disso responde 409 SALDO_ESTOQUE_ACIMA_DO_LIMITE, preservando
+        espaco para devolucoes por cancelamento ou recusa de pagamento.
+        As reservas sao somadas apos obter a trava do estoque.
+        Saldo, movimentacao e auditoria
+        estoque.movimentado sao gravados na mesma transacao, com trava
+        do registro de estoque para serializar pedidos e lancamentos.
+        Cada chamada valida gera um novo movimento; nao ha idempotencia.
+      parameters:
+        - $ref: '#/components/parameters/UnidadeEstoqueId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NovaMovimentacaoEstoque'
+            examples:
+              entrada:
+                value: { produtoId: 1, tipo: ENTRADA, quantidade: 20, motivo: Reposicao semanal }
+              ajuste:
+                value:
+                  { produtoId: 1, tipo: AJUSTE, quantidade: -2, motivo: Perda no armazenamento }
+      responses:
+        '201':
+          description: Movimentacao registrada com o saldo resultante
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/MovimentacaoEstoque'
+        '401':
+          $ref: '#/components/responses/NaoAutenticado'
+        '403':
+          $ref: '#/components/responses/SemPermissao'
+        '404':
+          $ref: '#/components/responses/RecursoNaoEncontrado'
+        '409':
+          $ref: '#/components/responses/EstoqueEmConflito'
         '422':
           $ref: '#/components/responses/DadosInvalidos'
 
@@ -726,7 +787,7 @@ paths:
         transacao da acao: criacao, mudanca de status e cancelamento de
         pedido; solicitacao, resultado e estorno de pagamento; cadastro,
         login, tentativa de login negada e logout; adesao e revogacao do
-        consentimento de fidelidade. Todo 403 da API tambem
+        consentimento de fidelidade; movimentacao manual de estoque. Todo 403 da API tambem
         grava um registro `acesso.negado`, inclusive a tentativa de abrir
         esta rota sem ser ADMIN.
 
@@ -757,13 +818,14 @@ paths:
                 pagamento.estornado,
                 fidelidade.aderida,
                 fidelidade.revogada,
+                estoque.movimentado,
                 acesso.negado,
               ]
         - name: entidade
           in: query
           schema:
             type: string
-            enum: [user, pedido, pagamento, fidelidade, rota]
+            enum: [user, pedido, pagamento, fidelidade, estoque, rota]
         - name: entidadeId
           in: query
           schema:
@@ -876,6 +938,16 @@ components:
       schema:
         type: integer
         example: 1
+    UnidadeEstoqueId:
+      name: id
+      in: path
+      required: true
+      description: Identificador da unidade; formato ou faixa invalida responde 422
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 2147483647
+        example: 1
     PedidoId:
       name: id
       in: path
@@ -917,12 +989,13 @@ components:
               pagamento.estornado,
               fidelidade.aderida,
               fidelidade.revogada,
+              estoque.movimentado,
               acesso.negado,
             ]
           example: pedido.cancelado
         entidade:
           type: string
-          enum: [user, pedido, pagamento, fidelidade, rota]
+          enum: [user, pedido, pagamento, fidelidade, estoque, rota]
           example: pedido
         entidadeId:
           type: string
@@ -955,6 +1028,62 @@ components:
           type: string
           format: date-time
           example: '2026-02-05T12:00:00.000Z'
+
+    NovaMovimentacaoEstoque:
+      type: object
+      required: [produtoId, tipo, quantidade, motivo]
+      properties:
+        produtoId:
+          type: integer
+          minimum: 1
+          maximum: 2147483647
+        tipo:
+          type: string
+          enum: [ENTRADA, AJUSTE]
+        quantidade:
+          type: integer
+          minimum: -2147483647
+          maximum: 2147483647
+          not: { enum: [0] }
+          description: Positiva para ENTRADA; diferenca com sinal para AJUSTE
+        motivo:
+          type: string
+          minLength: 3
+          maxLength: 255
+          description: Justificativa apos remover espacos nas extremidades
+      oneOf:
+        - properties:
+            tipo: { enum: [ENTRADA] }
+            quantidade: { minimum: 1 }
+        - properties:
+            tipo: { enum: [AJUSTE] }
+
+    MovimentacaoEstoque:
+      type: object
+      required:
+        [movimentoId, estoqueId, usuarioId, tipo, quantidade, saldoResultante, motivo, createdAt]
+      properties:
+        movimentoId:
+          type: integer
+        estoqueId:
+          type: integer
+        usuarioId:
+          type: integer
+        tipo:
+          type: string
+          enum: [ENTRADA, AJUSTE]
+        quantidade:
+          type: integer
+          description: Diferenca aplicada ao saldo anterior
+        saldoResultante:
+          type: integer
+          minimum: 0
+          maximum: 2147483647
+        motivo:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
 
     PaginationMetadata:
       type: object
@@ -1630,6 +1759,13 @@ components:
                 timestamp: '2026-02-05T12:00:00.000Z'
                 path: /api/v1/pedidos
                 requestId: 2c8d3e4f-5061-4b72-9c83-ad94e5f60718
+    EstoqueEmConflito:
+      description: Saldo insuficiente para o ajuste ou saldo resultante somado as reservas acima de 2147483647
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erro'
+
     PedidoEmConflito:
       description: Unidade inativa, produto indisponivel, estoque insuficiente ou resgate de pontos recusado
       content:

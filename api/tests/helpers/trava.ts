@@ -4,6 +4,7 @@ import type { TransactionClientContract } from '@adonisjs/lucid/types/database'
 
 import FidelidadeConta from '#models/fidelidade_conta'
 import Pedido from '#models/pedido'
+import Estoque from '#models/estoque'
 
 async function comTrava<T>(
   travar: (trava: TransactionClientContract) => Promise<unknown>,
@@ -47,6 +48,18 @@ export function comContaTravada<T>(
   return comTrava(
     (trava) =>
       FidelidadeConta.query({ client: trava }).where('id', conta.id).forUpdate().firstOrFail(),
+    disparar,
+    enquantoTravado
+  )
+}
+
+export function comEstoqueTravado<T>(
+  estoque: Estoque,
+  disparar: () => Promise<T>,
+  enquantoTravado: (trava: TransactionClientContract) => Promise<void>
+) {
+  return comTrava(
+    (trava) => Estoque.query({ client: trava }).where('id', estoque.id).forUpdate().firstOrFail(),
     disparar,
     enquantoTravado
   )

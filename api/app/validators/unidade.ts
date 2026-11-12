@@ -16,3 +16,7 @@ export const listarCardapioValidator = vine.create({
 export const listarEstoqueValidator = vine.create({
   ...paginacao(),
 })
+
+export const identificarUnidadeEstoqueValidator = vine.create({
+  id: vine.number().withoutDecimals().positive().max(2147483647),
+})

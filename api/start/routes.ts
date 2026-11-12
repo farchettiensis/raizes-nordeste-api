@@ -28,6 +28,10 @@ router
         router
           .get(':id/estoque', [controllers.Estoques, 'index'])
           .use(middleware.perfil({ perfis: PERFIS_DA_OPERACAO }))
+        router
+          .post(':id/estoque/movimentacoes', [controllers.Estoques, 'store'])
+          .as('estoque.movimentacoes.store')
+          .use(middleware.perfil({ perfis: ['GERENTE', 'ADMIN'] }))
       })
       .prefix('unidades')
       .as('unidades')

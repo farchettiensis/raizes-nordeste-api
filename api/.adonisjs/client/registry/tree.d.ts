@@ -26,6 +26,11 @@ export interface ApiDefinition {
     estoques: {
       index: typeof routes['unidades.estoques.index']
     }
+    estoque: {
+      movimentacoes: {
+        store: typeof routes['unidades.estoque.movimentacoes.store']
+      }
+    }
   }
   pedidos: {
     index: typeof routes['pedidos.index']

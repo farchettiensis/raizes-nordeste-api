@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "Raízes do Nordeste API",
-    "description": "Plano de testes da API Raízes do Nordeste. Rode a coleção inteira, em ordem, com a API e o pagamento mock no ar (`docker compose up --build` na raiz do repositório, com os dados de demonstração). As pastas dependem umas das outras: os scripts guardam tokens e ids em variáveis da coleção.\n\nVariáveis a ajustar, se necessário: `baseUrl` (API) e `mockUrl` (pagamento mock).\n\nOs cenários numerados (T01 a T44) estão descritos na tabela do README.",
+    "description": "Plano de testes da API Raízes do Nordeste. Rode a coleção inteira, em ordem, com a API e o pagamento mock no ar (`docker compose up --build` na raiz do repositório, com os dados de demonstração). As pastas dependem umas das outras: os scripts guardam tokens e ids em variáveis da coleção.\n\nVariáveis a ajustar, se necessário: `baseUrl` (API) e `mockUrl` (pagamento mock).\n\nOs cenários numerados (T01 a T48) estão descritos na tabela do README.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -3368,6 +3368,321 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Estoque",
+      "description": "Entradas e ajustes manuais pelo gerente, com os tokens e ids das pastas anteriores.",
+      "item": [
+        {
+          "name": "Consultar saldo antes da entrada",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "const saldo = pm.response.json().data.find((s) => s.produtoId === Number(pm.collectionVariables.get('produtoId')));",
+                  "pm.test('Produto com estoque cadastrado', () => pm.expect(saldo).to.be.an('object'));",
+                  "pm.collectionVariables.set('saldoAntesDaEntrada', saldo.quantidade);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/unidades/{{unidadeId}}/estoque?limit=50",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "unidades",
+                "{{unidadeId}}",
+                "estoque"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                }
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{gerenteToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Restrito à operação da própria unidade. Esperado: 200 com o saldo produto a produto."
+          }
+        },
+        {
+          "name": "T45 Entrada de estoque",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/unidades/{{unidadeId}}/estoque/movimentacoes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "unidades",
+                "{{unidadeId}}",
+                "estoque",
+                "movimentacoes"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{gerenteToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Movimentação manual com motivo. ENTRADA soma; AJUSTE aplica uma diferença com sinal. T45 e T46 deixam o saldo como estava.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"produtoId\": {{produtoId}},\n  \"tipo\": \"ENTRADA\",\n  \"quantidade\": 5,\n  \"motivo\": \"Conferencia de estoque\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const movimento = pm.response.json().data;",
+                  "pm.test('Tipo do movimento', () => pm.expect(movimento.tipo).to.eql('ENTRADA'));",
+                  "pm.test('Saldo resultante', () => pm.expect(movimento.saldoResultante).to.eql(Number(pm.collectionVariables.get('saldoAntesDaEntrada')) + 5));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "T46 Ajuste de estoque",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/unidades/{{unidadeId}}/estoque/movimentacoes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "unidades",
+                "{{unidadeId}}",
+                "estoque",
+                "movimentacoes"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{gerenteToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Movimentação manual com motivo. ENTRADA soma; AJUSTE aplica uma diferença com sinal. T45 e T46 deixam o saldo como estava.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"produtoId\": {{produtoId}},\n  \"tipo\": \"AJUSTE\",\n  \"quantidade\": -5,\n  \"motivo\": \"Conferencia de estoque\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "const movimento = pm.response.json().data;",
+                  "pm.test('Tipo do movimento', () => pm.expect(movimento.tipo).to.eql('AJUSTE'));",
+                  "pm.test('Saldo resultante', () => pm.expect(movimento.saldoResultante).to.eql(Number(pm.collectionVariables.get('saldoAntesDaEntrada'))));",
+                  "pm.collectionVariables.set('ajusteAcimaDoSaldo', -(movimento.saldoResultante + 1));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "T47 Atendente tenta movimentar",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/unidades/{{unidadeId}}/estoque/movimentacoes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "unidades",
+                "{{unidadeId}}",
+                "estoque",
+                "movimentacoes"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{atendenteToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Movimentação manual com motivo. ENTRADA soma; AJUSTE aplica uma diferença com sinal. T45 e T46 deixam o saldo como estava.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"produtoId\": {{produtoId}},\n  \"tipo\": \"ENTRADA\",\n  \"quantidade\": 5,\n  \"motivo\": \"Conferencia de estoque\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Codigo de erro', () => pm.expect(pm.response.json().error).to.eql('SEM_PERMISSAO'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "T48 Ajuste maior que o saldo",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/unidades/{{unidadeId}}/estoque/movimentacoes",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "unidades",
+                "{{unidadeId}}",
+                "estoque",
+                "movimentacoes"
+              ]
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{gerenteToken}}",
+                  "type": "string"
+                }
+              ]
+            },
+            "description": "Movimentação manual com motivo. ENTRADA soma; AJUSTE aplica uma diferença com sinal. T45 e T46 deixam o saldo como estava.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"produtoId\": {{produtoId}},\n  \"tipo\": \"AJUSTE\",\n  \"quantidade\": {{ajusteAcimaDoSaldo}},\n  \"motivo\": \"Conferencia de estoque\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Codigo de erro', () => pm.expect(pm.response.json().error).to.eql('ESTOQUE_INSUFICIENTE'));"
                 ]
               }
             }

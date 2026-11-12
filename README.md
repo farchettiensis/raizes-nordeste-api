@@ -143,6 +143,7 @@ O Swagger em `/docs` traz os exemplos de request e response de cada um. Esta tab
 | GET | `/api/v1/unidades` | pública | Lista unidades, com filtros e paginação |
 | GET | `/api/v1/unidades/:id` | pública | Detalhe de uma unidade |
 | GET | `/api/v1/unidades/:id/cardapio` | pública | Cardápio da unidade, com preço e disponibilidade |
+| POST | `/api/v1/unidades/:id/estoque/movimentacoes` | token, GERENTE da própria unidade ou ADMIN | Registra entrada ou ajuste com motivo e auditoria |
 | GET | `/api/v1/unidades/:id/estoque` | token, perfis da operação, própria unidade | Saldo de estoque da unidade, produto a produto |
 | GET | `/api/v1/pedidos` | token, pedidos no escopo do usuário | Lista pedidos, filtrando por `canalPedido`, `status` e `unidadeId` |
 | POST | `/api/v1/pedidos` | token, perfil CLIENTE | Cria o pedido validando cardápio e estoque da unidade |
@@ -185,6 +186,25 @@ Nas rotas de um pedido existente, além do perfil, a API confere o escopo do usu
 Fora do escopo, a resposta é `403 SEM_PERMISSAO`. Um perfil de unidade sem unidade vinculada recebe `403 SEM_UNIDADE_VINCULADA`: é um erro de cadastro, não uma lista vazia. A ordem é perfil, existência (`404`) e escopo (`403`). `GET /pedidos/:id` aceita qualquer perfil autenticado; `POST /pedidos/:id/pagamento` continua exclusivo do CLIENTE, então ali o escopo se reduz ao dono do pedido.
 
 No estoque vale o mesmo vínculo: ATENDENTE, COZINHA e GERENTE consultam só a unidade em `users.unidade_id` (outra unidade é `403 SEM_PERMISSAO`, sem vínculo é `403 SEM_UNIDADE_VINCULADA`), e ADMIN consulta qualquer uma. A existência da unidade é conferida antes (`404`).
+
+### Entradas e ajustes de estoque
+
+`POST /api/v1/unidades/:id/estoque/movimentacoes` exige GERENTE da própria unidade ou ADMIN. ATENDENTE, COZINHA e CLIENTE recebem `403`. O produto precisa ter saldo cadastrado naquela unidade, inclusive se estiver zerado; unidade ou registro de estoque inexistente responde `404`. O endpoint não cadastra produtos, cardápios nem novos registros de estoque. Tanto a consulta quanto a movimentação de estoque validam o id da unidade: deve ser inteiro entre 1 e 2147483647; fora disso, respondem `422 DADOS_INVALIDOS` antes da consulta ao banco.
+
+```json
+{
+  "produtoId": 1,
+  "tipo": "ENTRADA",
+  "quantidade": 20,
+  "motivo": "Reposição semanal"
+}
+```
+
+`ENTRADA` soma uma quantidade inteira positiva. `AJUSTE` aplica uma diferença inteira com sinal: saldo 10 e quantidade -3 resultam em saldo 7; quantidade 3 resulta em 13. Serve para perdas e correções de inventário. Zero não gera movimento e responde `422`, assim como motivo ausente ou fora de 3 a 255 caracteres após remover espaços nas extremidades. `SAIDA` permanece vinculada ao fluxo de pedidos.
+
+A resposta `201` devolve o movimento em `data`, com `movimentoId`, `estoqueId`, `usuarioId`, `tipo`, `quantidade`, `saldoResultante`, `motivo` e `createdAt`. Saldo negativo responde `409 ESTOQUE_INSUFICIENTE`; saldo resultante somado às unidades reservadas em pedidos `AGUARDANDO_PAGAMENTO` ou `PAGO` acima do limite inteiro do banco (2147483647), `409 SALDO_ESTOQUE_ACIMA_DO_LIMITE`. A soma das reservas ocorre depois de obter a trava do estoque, preservando espaço para devoluções por cancelamento ou recusa de pagamento. Pedidos em preparo, prontos, entregues ou cancelados não compõem essa reserva.
+
+Saldo, movimento e auditoria `estoque.movimentado` são persistidos na mesma transação. A trava `SELECT ... FOR UPDATE` no estoque é a mesma usada pelos pedidos e devoluções, evitando perda de atualização entre operações concorrentes. Uma falha reverte tudo. O movimento manual registra o responsável e fica sem pedido vinculado. Cada chamada válida é um novo lançamento, sem chave de idempotência: após timeout, confira o saldo e a auditoria antes de repetir.
 
 ## Criação de pedido
 
@@ -402,6 +422,7 @@ Toda ação sensível deixa um registro em `logs_auditoria`, que a matriz consul
 | `auth.login_negado` | senha errada ou e-mail desconhecido; aponta a conta alvo quando ela existe |
 | `pedido.criado` | criação do pedido, com unidade, canal e total |
 | `pedido.status_alterado` | todo avanço de status, inclusive a aprovação pelo webhook (com `usuarioId` nulo) |
+| `estoque.movimentado` | entrada ou ajuste manual, com movimento, unidade, produto, tipo, diferença, saldos anterior e resultante e motivo |
 | `pedido.cancelado` | todo cancelamento, inclusive pela recusa do pagamento (com `usuarioId` nulo e o motivo da recusa), com o status de origem, o motivo, se houve estorno e se o estoque voltou |
 | `pagamento.solicitado`, `pagamento.aprovado`, `pagamento.recusado`, `pagamento.estornado` | ciclo do pagamento |
 | `fidelidade.aderida`, `fidelidade.revogada` | consentimento da fidelidade dado ou revogado; a revogação guarda os pontos perdidos |
@@ -500,6 +521,10 @@ Os cenários numerados são as requisições de mesmo nome na coleção (pasta/n
 | T42 | Resgate sem adesão ativa | `POST /pedidos` | token de T01, depois de revogar | 409 `FIDELIDADE_INATIVA` | Erros |
 | T43 | Encerrar cadastro do cliente novo | `DELETE /clientes/conta` | token de T01, senha atual | 204, conta encerrada | LGPD |
 | T44 | Token da conta encerrada | `GET /account/profile` | token de T01 após T43 | 401 | LGPD |
+| T45 | Entrada de estoque | `POST /unidades/:id/estoque/movimentacoes` | gerente, ENTRADA de 5 | 201, saldo acrescido em 5 | Estoque |
+| T46 | Ajuste de estoque | `POST /unidades/:id/estoque/movimentacoes` | gerente, AJUSTE de -5 após T45 | 201, saldo anterior restaurado | Estoque |
+| T47 | Atendente tenta movimentar | `POST /unidades/:id/estoque/movimentacoes` | token da atendente | 403 `SEM_PERMISSAO` | Estoque |
+| T48 | Ajuste maior que o saldo | `POST /unidades/:id/estoque/movimentacoes` | quantidade negativa superior ao saldo | 409 `ESTOQUE_INSUFICIENTE` | Estoque |
 
 Além da coleção, a suíte automatizada da API (`npm test` em `api/`, com Japa) cobre as mesmas regras e as que a coleção não alcança, como pedidos e webhooks simultâneos e falhas do provedor.
 

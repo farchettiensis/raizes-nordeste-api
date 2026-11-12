@@ -37,7 +37,7 @@ export const STATUS_DEFINIDOS_PELA_OPERACAO = [
   'CANCELADO',
 ] as const satisfies readonly StatusPedido[]
 
-const STATUS_COM_INSUMOS_INTACTOS: StatusPedido[] = ['AGUARDANDO_PAGAMENTO', 'PAGO']
+export const STATUS_COM_INSUMOS_INTACTOS: StatusPedido[] = ['AGUARDANDO_PAGAMENTO', 'PAGO']
 
 const CANCELAM_DEPOIS_DE_PAGO: PerfilUsuario[] = ['GERENTE', 'ADMIN']
 

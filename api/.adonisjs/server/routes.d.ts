@@ -13,6 +13,7 @@ export type ScannedRoutes = {
     'unidades.unidades.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'unidades.cardapios.index': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'unidades.estoques.index': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
+    'unidades.estoque.movimentacoes.store': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pedidos.index': { paramsTuple?: []; params?: {} }
     'pedidos.store': { paramsTuple?: []; params?: {} }
     'pedidos.show': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
@@ -61,6 +62,7 @@ export type ScannedRoutes = {
   POST: {
     'auth.new_account.store': { paramsTuple?: []; params?: {} }
     'auth.access_tokens.store': { paramsTuple?: []; params?: {} }
+    'unidades.estoque.movimentacoes.store': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'pedidos.store': { paramsTuple?: []; params?: {} }
     'pedidos.pagamento.store': { paramsTuple: [ParamValue]; params: {'id': ParamValue} }
     'fidelidade.adesao.store': { paramsTuple?: []; params?: {} }

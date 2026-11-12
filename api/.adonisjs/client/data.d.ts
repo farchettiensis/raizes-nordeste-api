@@ -9,6 +9,7 @@ import type FidelidadeMovimentoTransformer from '#transformers/fidelidade_movime
 import type FidelidadeTransformer from '#transformers/fidelidade_transformer'
 import type ItemCardapioTransformer from '#transformers/item_cardapio_transformer'
 import type LogAuditoriaTransformer from '#transformers/log_auditoria_transformer'
+import type MovimentacaoEstoqueTransformer from '#transformers/movimentacao_estoque_transformer'
 import type PagamentoTransformer from '#transformers/pagamento_transformer'
 import type PedidoTransformer from '#transformers/pedido_transformer'
 import type SaldoEstoqueTransformer from '#transformers/saldo_estoque_transformer'
@@ -31,6 +32,10 @@ export namespace Data {
   export type LogAuditoria = InferData<LogAuditoriaTransformer>
   export namespace LogAuditoria {
     export type Variants = InferVariants<LogAuditoriaTransformer>
+  }
+  export type MovimentacaoEstoque = InferData<MovimentacaoEstoqueTransformer>
+  export namespace MovimentacaoEstoque {
+    export type Variants = InferVariants<MovimentacaoEstoqueTransformer>
   }
   export type Pagamento = InferData<PagamentoTransformer>
   export namespace Pagamento {
